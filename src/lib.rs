@@ -1,8 +1,5 @@
-#[macro_use]
-extern crate lazy_static;
-
-use std::os::raw::{c_double, c_float, c_int};
-use std::sync::Mutex;
+use wasm_bindgen::prelude::*;
+use std::sync::{LazyLock, Mutex};
 
 mod browser;
 mod engine;
@@ -12,39 +9,47 @@ use engine::EngineState;
 use world::{Tile, WorldState};
 
 // Imported js functions. Note, some are used in other modules (browser, utils).
+#[wasm_bindgen]
 extern "C" {
+    #[wasm_bindgen(js_name = "js_update")]
     fn js_update();
-    fn js_draw_fps(layer_id: c_int, fps: c_double);
-    fn js_path_count(layer_id: c_int, count: c_int);
+    
+    #[wasm_bindgen(js_name = "js_draw_fps")]
+    fn js_draw_fps(layer_id: i32, fps: f64);
+    
+    #[wasm_bindgen(js_name = "js_path_count")]
+    fn js_path_count(layer_id: i32, count: i32);
+    
+    #[wasm_bindgen(js_name = "js_draw_circle")]
     fn js_draw_circle(
-        layer_id: c_int,
-        px: c_double,
-        py: c_double,
-        radius: c_double,
-        ch: c_int,
-        cs: c_int,
-        cl: c_int,
-        ca: c_float,
+        layer_id: i32,
+        px: f64,
+        py: f64,
+        radius: f64,
+        ch: i32,
+        cs: i32,
+        cl: i32,
+        ca: f32,
     );
+    
+    #[wasm_bindgen(js_name = "js_draw_tile")]
     fn js_draw_tile(
-        layer_id: c_int,
-        px: c_double,
-        py: c_double,
-        size: c_double,
-        ch: c_int,
-        cs: c_int,
-        cl: c_int,
-        ca: c_float,
+        layer_id: i32,
+        px: f64,
+        py: f64,
+        size: f64,
+        ch: i32,
+        cs: i32,
+        cl: i32,
+        ca: f32,
     );
 }
 
 // Learned about this pattern from rocket_wasm on github
 // https://github.com/aochagavia/rocket_wasm/blob/d0ca51beb9c7c351a1f0266206edfd553bf078d3/src/lib.rs
 // QUESTION: is there a better way/place to store state???
-lazy_static! {
-    static ref WORLD_STATE: Mutex<WorldState> = Mutex::new(WorldState::new());
-    static ref ENGINE_STATE: Mutex<EngineState> = Mutex::new(EngineState::new());
-}
+static WORLD_STATE: LazyLock<Mutex<WorldState>> = LazyLock::new(|| Mutex::new(WorldState::new()));
+static ENGINE_STATE: LazyLock<Mutex<EngineState>> = LazyLock::new(|| Mutex::new(EngineState::new()));
 
 // Maps to WASM_ASTAR.layers on the client side
 enum Layer {
@@ -53,8 +58,13 @@ enum Layer {
     Fps = 2,
 }
 
-#[no_mangle]
-pub extern "C" fn init(debug: i32, render_interval_ms: i32, window_width: u32, window_height: u32) {
+#[wasm_bindgen(start)]
+pub fn init() {
+    console_error_panic_hook::set_once();
+}
+
+#[wasm_bindgen]
+pub fn wasm_init(debug: i32, render_interval_ms: i32, window_width: u32, window_height: u32) {
     utils::log("Initializing Rust/WASM");
     // Requires block curlies so lifetime of world ends which causes unlock
     // and allows initial_draw() to gain control of the lock.
@@ -78,28 +88,28 @@ pub extern "C" fn init(debug: i32, render_interval_ms: i32, window_width: u32, w
     initial_draw();
 }
 
-#[no_mangle]
-pub extern "C" fn tick(elapsed_time: f64) {
+#[wasm_bindgen]
+pub fn tick(elapsed_time: f64) {
     browser::clear_screen(Layer::Main as i32);
     update(elapsed_time);
     draw(elapsed_time);
     browser::request_next_tick();
 }
 
-#[no_mangle]
-pub extern "C" fn key_down(key_code: u32) {
+#[wasm_bindgen]
+pub fn key_down(key_code: u32) {
     let engine = &mut ENGINE_STATE.lock().unwrap();
     engine.set_key_down(key_code);
 }
 
-#[no_mangle]
-pub extern "C" fn key_up(key_code: u32) {
+#[wasm_bindgen]
+pub fn key_up(key_code: u32) {
     let engine = &mut ENGINE_STATE.lock().unwrap();
     engine.set_key_up(key_code);
 }
 
-#[no_mangle]
-pub extern "C" fn mouse_move(x: i32, y: i32) {
+#[wasm_bindgen]
+pub fn mouse_move(x: i32, y: i32) {
     let engine = &mut ENGINE_STATE.lock().unwrap();
     let world = &mut WORLD_STATE.lock().unwrap();
     engine.mouse_move(x, y);
@@ -113,9 +123,7 @@ fn update(elapsed_time: f64) {
     let world = &mut WORLD_STATE.lock().unwrap();
     world.set_start_node();
     world.calc_astar();
-    unsafe {
-        js_update();
-    }
+    js_update();
 }
 
 fn handle_input() {
@@ -197,18 +205,16 @@ fn draw_background(world: &WorldState) {
 
 fn draw_path(world: &WorldState, t: &Tile) {
     let half_tile = (world.tile_size / 2) as f64;
-    unsafe {
-        js_draw_circle(
-            Layer::Main as i32,
-            t.transform.pos_x + half_tile,
-            t.transform.pos_y + half_tile,
-            t.transform.scale_x / 5_f64,
-            280,
-            100,
-            73,
-            1_f32,
-        );
-    }
+    js_draw_circle(
+        Layer::Main as i32,
+        t.transform.pos_x + half_tile,
+        t.transform.pos_y + half_tile,
+        t.transform.scale_x / 5_f64,
+        280,
+        100,
+        73,
+        1_f32,
+    );
     if t.parent_id >= 0 {
         draw_path(world, &world.tiles[t.parent_id as usize]);
     }
@@ -227,40 +233,34 @@ fn draw_tile(layer: Layer, t: &Tile) {
 }
 
 fn draw_tile_with_color(layer: Layer, t: &Tile, c: &engine::Color) {
-    unsafe {
-        js_draw_tile(
-            layer as i32,
-            t.transform.pos_x,
-            t.transform.pos_y,
-            t.transform.scale_x,
-            c.h as i32,
-            c.s as i32,
-            c.l as i32,
-            c.a,
-        );
-    }
+    js_draw_tile(
+        layer as i32,
+        t.transform.pos_x,
+        t.transform.pos_y,
+        t.transform.scale_x,
+        c.h as i32,
+        c.s as i32,
+        c.l as i32,
+        c.a,
+    );
 }
 
 fn draw_player(world: &WorldState) {
     let half_tile = (world.tile_size / 2) as f64;
-    unsafe {
-        js_draw_circle(
-            Layer::Main as i32,
-            world.player.pos_x + half_tile,
-            world.player.pos_y + half_tile,
-            (world.tile_size / 4) as f64,
-            32,
-            100,
-            55,
-            1_f32,
-        );
-    }
+    js_draw_circle(
+        Layer::Main as i32,
+        world.player.pos_x + half_tile,
+        world.player.pos_y + half_tile,
+        (world.tile_size / 4) as f64,
+        32,
+        100,
+        55,
+        1_f32,
+    );
 }
 
 fn draw_path_count(path_count: i32) {
-    unsafe {
-        js_path_count(Layer::Main as i32, path_count);
-    }
+    js_path_count(Layer::Main as i32, path_count);
 }
 
 fn draw_fps(elapsed_time: f64) {
@@ -268,8 +268,6 @@ fn draw_fps(elapsed_time: f64) {
     let fps = engine.fps;
     engine.render_fps(elapsed_time, 150, || {
         browser::clear_screen(Layer::Fps as i32);
-        unsafe {
-            js_draw_fps(Layer::Fps as i32, fps);
-        }
+        js_draw_fps(Layer::Fps as i32, fps);
     });
 }

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use engine::{Color, Transform};
-use utils::{log_fmt, random, random_range};
+use crate::engine::{Color, Transform};
+use crate::utils::{log_fmt, random, random_range};
 
 mod tile;
 pub use self::tile::Tile;

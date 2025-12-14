@@ -1,0 +1,33 @@
+{
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module",
+    "project": "./tsconfig.json"
+  },
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:@typescript-eslint/recommended-requiring-type-checking"
+  ],
+  "plugins": ["@typescript-eslint"],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-unused-vars": "error",
+    "@typescript-eslint/consistent-type-assertions": ["error", { "assertionStyle": "never" }],
+    "@typescript-eslint/no-non-null-assertion": "error",
+    "no-restricted-globals": ["error", "setTimeout", "setInterval"],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.name='setTimeout']",
+        "message": "setTimeout is not allowed. Use requestAnimationFrame or other alternatives."
+      },
+      {
+        "selector": "CallExpression[callee.name='setInterval']",
+        "message": "setInterval is not allowed. Use requestAnimationFrame or other alternatives."
+      }
+    ]
+  }
+}
+

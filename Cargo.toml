@@ -1,7 +1,7 @@
 [package]
 name = "wasm-astar"
 version = "0.1.0"
-authors = ["Jacob Deichert <git@jakedeichert.com>"]
+edition = "2021"
 
 [profile.release]
 lto = true
@@ -9,7 +9,8 @@ opt-level = 's'
 
 [lib]
 path = "src/lib.rs"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-lazy_static = "1.0"
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"

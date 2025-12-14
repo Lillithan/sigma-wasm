@@ -150,22 +150,250 @@ const wasmReadStrFromMemory = (ptr, length) => {
 
 ## Building
 
-Follow the [instructions on Hello Rust](https://www.hellorust.com/setup/wasm-target/) to get the wasm toolchain set up. Below is a summary of the steps required.
+### Local Development (Without Docker)
 
-~~~sh
-# Install the latest nightly
-rustup toolchain install nightly # or rustup update nightly
+#### Quick Setup
 
-# Add wasm as a target
-rustup target add wasm32-unknown-unknown --toolchain nightly
+Run the setup script to install all required dependencies:
 
-# Install wasm-gc to shrink the output file (optional)
-cargo install --git https://github.com/alexcrichton/wasm-gc
+```bash
+./scripts/setup-local.sh
+```
 
-# Run the build script
-./scripts/build.sh
+This will:
+- Check for Rust, Node.js, and npm
+- Install wasm-bindgen-cli if missing
+- Install npm dependencies
+- Set up the wasm32-unknown-unknown target
 
-# Then, serve the `dist/` directory
-# If you have node installed, you can run the `serve` package directly with npx:
+#### Manual Setup
+
+If you prefer to set up manually:
+
+```bash
+# Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Add wasm32 target
+rustup target add wasm32-unknown-unknown
+
+# Install wasm-bindgen-cli
+cargo install wasm-bindgen-cli --version 0.2.87
+
+# Install wasm-opt (optional but recommended)
+# On macOS: brew install binaryen
+# On Debian/Ubuntu: sudo apt-get install binaryen
+# On Alpine: apk add binaryen
+# Or via npm: npm install -g wasm-opt
+
+# Install npm dependencies
+npm install
+```
+
+#### Development
+
+Start the development server:
+
+```bash
+# Option 1: Use the dev script
+./scripts/dev-local.sh
+
+# Option 2: Use npm directly
+npm run dev
+```
+
+#### Production Build
+
+Build for production:
+
+```bash
+# Build WASM and frontend
+npm run build
+
+# Or build WASM only
+npm run build:wasm
+
+# Preview production build
+npm run preview
+```
+
+### Docker Build
+
+#### Build Docker Image
+
+```bash
+# Build the Docker image
+npm run build:docker
+# Or directly:
+docker build -t sigma-wasm .
+```
+
+#### Run Docker Container
+
+```bash
+# Run the container
+docker run -p 3000:80 sigma-wasm
+
+# Access at http://localhost:3000
+```
+
+#### Docker Compose (Optional)
+
+If you have `docker-compose.yml`:
+
+```bash
+docker-compose up
+```
+
+## Deployment
+
+### Render.com Deployment
+
+This project is configured for automatic deployment on Render.com using Docker.
+
+#### Prerequisites
+
+1. A Render.com account
+2. A Git repository (GitHub, GitLab, or Bitbucket)
+3. The repository connected to Render.com
+
+#### Automatic Deployment
+
+1. **Push your code to Git** - Ensure `render.yaml` is in the root directory
+2. **Connect to Render** - In Render dashboard, create a new "Blueprint" service
+3. **Render will automatically:**
+   - Detect the `render.yaml` file
+   - Build using the Dockerfile
+   - Deploy the service
+   - Set up auto-deploy from your Git repository
+
+#### Manual Configuration
+
+If you prefer to configure manually:
+
+1. Create a new **Web Service** in Render
+2. Connect your Git repository
+3. Set the following:
+   - **Environment**: Docker
+   - **Dockerfile Path**: `./Dockerfile`
+   - **Docker Context**: `.`
+   - **Build Command**: (auto-detected from Dockerfile)
+   - **Start Command**: (auto-detected from Dockerfile)
+
+#### Environment Variables
+
+Environment variables can be set in:
+- `render.yaml` (for static values)
+- Render.com dashboard (for secrets and dynamic values)
+
+See `.env.example` for available environment variables.
+
+#### Build Configuration
+
+The `render.yaml` file includes:
+- Build filters (only rebuild on relevant file changes)
+- Health check configuration
+- Auto-deploy settings
+- Environment variables
+
+### Other Deployment Options
+
+#### Static File Hosting
+
+After building with `npm run build`, the `dist/` directory contains static files that can be served by:
+- Any static file server (nginx, Apache, etc.)
+- CDN services (Cloudflare, AWS CloudFront, etc.)
+- Static hosting (Netlify, Vercel, GitHub Pages, etc.)
+
+```bash
+# Build the project
+npm run build
+
+# The dist/ directory contains all static files
+# Serve with any static file server:
 npx serve dist
-~~~
+```
+
+## Environment Variables
+
+See `.env.example` for a template of available environment variables.
+
+### Build-time Variables
+
+- `NODE_ENV` - Set to `production` for production builds
+
+### Runtime Variables
+
+Currently, no runtime environment variables are required. Add them to `.env.example` and `render.yaml` as needed.
+
+## Troubleshooting
+
+### Build Issues
+
+**Error: `cargo: command not found`**
+- Install Rust: https://rustup.rs/
+- Ensure Rust is in your PATH
+
+**Error: `wasm-bindgen: command not found`**
+- Install with: `cargo install wasm-bindgen-cli --version 0.2.87`
+- Ensure `~/.cargo/bin` is in your PATH
+
+**Error: `wasm-opt: command not found`**
+- This is optional but recommended
+- Install via package manager or npm (see setup instructions above)
+- Build will still work without it, but WASM won't be optimized
+
+**Docker build fails**
+- Ensure Docker is running
+- Check that all required files are present
+- Review Docker build logs for specific errors
+
+### Runtime Issues
+
+**WASM module not loading**
+- Check browser console for errors
+- Ensure `pkg/` directory is accessible
+- Verify wasm-bindgen output files are present
+
+**404 errors for assets**
+- Ensure Vite build completed successfully
+- Check that `dist/` directory contains all files
+- Verify nginx configuration (if using Docker)
+
+### Render.com Issues
+
+**Deployment fails**
+- Check Render build logs
+- Verify `render.yaml` syntax
+- Ensure Dockerfile is valid
+- Check that all required files are in the repository
+
+**Service not starting**
+- Check Render service logs
+- Verify health check endpoint
+- Ensure port 80 is exposed in Dockerfile
+
+## Project Structure
+
+```
+sigma-wasm/
+├── Dockerfile              # Multi-stage Docker build
+├── .dockerignore           # Docker build exclusions
+├── render.yaml             # Render.com configuration
+├── .env.example            # Environment variables template
+├── Cargo.toml              # Rust dependencies
+├── package.json            # Node.js dependencies
+├── vite.config.ts          # Vite configuration
+├── tsconfig.json           # TypeScript configuration
+├── scripts/
+│   ├── build.sh            # WASM build script
+│   ├── setup-local.sh      # Local setup script
+│   └── dev-local.sh        # Local dev server script
+├── src/
+│   ├── lib.rs              # Rust main library
+│   ├── main.ts             # TypeScript entry point
+│   ├── types.ts             # TypeScript type definitions
+│   ├── styles.css           # Styles
+│   └── [rust modules]      # Rust source code
+└── dist/                   # Production build output (gitignored)
+```

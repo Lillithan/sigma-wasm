@@ -1,0 +1,108 @@
+# Cursor Rules for sigma-wasm Project
+
+## TypeScript & Code Quality Rules
+
+### Strict Type Safety
+- **NO `any` types** - Use proper types or `unknown` with type guards
+- **NO type casts** - Use type guards, discriminated unions, or proper type narrowing instead
+- **NO non-null assertions (`!`)** - Use proper null checks and type guards
+- **NO user-defined type guards** - TypeScript doesn't verify the narrowing logic, making them dangerous
+
+### Timing & Async
+- **NO `setTimeout` or `setInterval`** - Use `requestAnimationFrame` or other alternatives
+- Prefer event-driven patterns over polling
+
+### Type Design
+- **Prefer discriminated unions** over simple union types where appropriate
+- Use proper type narrowing instead of type assertions
+
+### Code Quality
+- **NO unused variables** - Remove or use all declared variables
+- **NO custom CSS files** - Use existing CSS or utility classes
+- **NO inline CSS** - Keep styles in separate stylesheet files
+- **NO dynamic imports** - Use static imports only
+
+## Agent Decision Framework
+
+Before implementing any change, plan, or action, agents MUST ask these questions:
+
+1. **Can this be simplified?**
+   - Is there a simpler approach that achieves the same goal?
+   - Can we reduce complexity without losing functionality?
+
+2. **Should these changes be more generalized to be used elsewhere (utility methods)?**
+   - Is this logic reusable?
+   - Should this be extracted into a utility function or shared module?
+   - Will other parts of the codebase benefit from this pattern?
+
+3. **Does it follow our current patterning?**
+   - Is this consistent with existing code patterns?
+   - If a larger refactor is needed, should it be a separate scope from the current task?
+   - Does this maintain architectural consistency?
+
+4. **Is it utilizing our existing dependency methods rather than reinventing the wheel?**
+   - Are we duplicating functionality that already exists?
+   - Can we use existing utilities or patterns instead?
+
+5. **Can other small, well-tested, utility dependencies be used (like lodash) rather than creating our own one-off utility methods?**
+   - Should we use a proven library instead of custom code?
+   - Is there a well-maintained dependency that solves this problem?
+   - Will using a library reduce maintenance burden?
+
+## Enforcement
+
+These rules are enforced via:
+- TypeScript compiler strict mode
+- ESLint rules (see `.eslintrc.json`)
+- Code review practices
+- Automated linting in CI/CD
+
+## Examples
+
+### ❌ Bad: Type cast
+```typescript
+const element = document.getElementById('foo') as HTMLElement;
+```
+
+### ✅ Good: Type guard
+```typescript
+const element = document.getElementById('foo');
+if (element instanceof HTMLElement) {
+  // use element
+}
+```
+
+### ❌ Bad: setTimeout
+```typescript
+setTimeout(() => doSomething(), 100);
+```
+
+### ✅ Good: requestAnimationFrame
+```typescript
+requestAnimationFrame(() => doSomething());
+```
+
+### ❌ Bad: Non-null assertion
+```typescript
+const value = obj!.property;
+```
+
+### ✅ Good: Null check
+```typescript
+if (obj) {
+  const value = obj.property;
+}
+```
+
+### ❌ Bad: Simple union
+```typescript
+type Result = string | number;
+```
+
+### ✅ Good: Discriminated union
+```typescript
+type Result = 
+  | { type: 'success'; value: string }
+  | { type: 'error'; message: string };
+```
+

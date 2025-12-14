@@ -1,46 +1,46 @@
-use std::os::raw::c_int;
+use wasm_bindgen::prelude::*;
 
+#[wasm_bindgen]
 extern "C" {
-    fn js_create_layer(id_ptr: *const u8, id_len: u32, key: c_int);
-    fn js_clear_screen(layer_id: c_int);
-    fn js_set_screen_size(width: c_int, height: c_int, quality: c_int);
-    fn js_set_layer_size(layer_id: c_int, width: c_int, height: c_int, quality: c_int);
+    #[wasm_bindgen(js_name = "js_create_layer")]
+    fn js_create_layer(id: &str, key: i32);
+    
+    #[wasm_bindgen(js_name = "js_clear_screen")]
+    fn js_clear_screen(layer_id: i32);
+    
+    #[wasm_bindgen(js_name = "js_set_screen_size")]
+    fn js_set_screen_size(width: i32, height: i32, quality: i32);
+    
+    #[wasm_bindgen(js_name = "js_set_layer_size")]
+    fn js_set_layer_size(layer_id: i32, width: i32, height: i32, quality: i32);
+    
+    #[wasm_bindgen(js_name = "js_request_tick")]
     fn js_request_tick();
-    fn js_start_interval_tick(ms: c_int);
+    
+    #[wasm_bindgen(js_name = "js_start_interval_tick")]
+    fn js_start_interval_tick(ms: i32);
 }
 
 pub fn create_layer(id: &str, key: i32) {
-    unsafe {
-        js_create_layer(id.as_ptr(), id.len() as u32, key);
-    }
+    js_create_layer(id, key);
 }
 
 pub fn clear_screen(layer: i32) {
-    unsafe {
-        js_clear_screen(layer);
-    }
+    js_clear_screen(layer);
 }
 
 pub fn set_layer_size(layer: i32, width: u32, height: u32, quality: u32) {
-    unsafe {
-        js_set_layer_size(layer, width as i32, height as i32, quality as i32);
-    }
+    js_set_layer_size(layer, width as i32, height as i32, quality as i32);
 }
 
 pub fn set_screen_size(width: u32, height: u32, quality: u32) {
-    unsafe {
-        js_set_screen_size(width as i32, height as i32, quality as i32);
-    }
+    js_set_screen_size(width as i32, height as i32, quality as i32);
 }
 
 pub fn request_next_tick() {
-    unsafe {
-        js_request_tick();
-    }
+    js_request_tick();
 }
 
 pub fn start_interval_tick(ms: i32) {
-    unsafe {
-        js_start_interval_tick(ms);
-    }
+    js_start_interval_tick(ms);
 }

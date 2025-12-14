@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+target/
+dist/
+pkg/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+*.md
+!README.md
+.cursorrules
+CODING_STANDARDS.md
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+*.log
+*.tsbuildinfo
+
+# Test files
+**/__tests__/
+**/*.test.ts
+**/*.spec.ts
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Render
+render.yaml
+
+# Old dist files (legacy)
+dist/demo.gif
+dist/index.html
+dist/main.js
+dist/styles.css
+dist/wasm_astar
+
