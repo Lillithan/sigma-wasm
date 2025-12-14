@@ -2,7 +2,7 @@
 
 This is a port of an A* implementation of mine from an old Unity maze project.
 
-Check out the demo [here](https://jacobdeichert.github.io/wasm-astar/)!
+Check out the demo [here](https://sigma-wasm.onrender.com/)!
 
 ![demo gif](dist/demo.gif)
 
