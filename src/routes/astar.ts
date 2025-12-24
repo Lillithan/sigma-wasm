@@ -25,10 +25,13 @@ const WASM_ASTAR: WasmAstar = {
   debug: false,
   renderIntervalMs: 1000,
   layers: new Map(),
-  layerWrapperEl: getLayerWrapper(),
+  layerWrapperEl: null,
 };
 
 export const init = async (): Promise<void> => {
+  // Get layer wrapper element (lazy initialization - only when init is called)
+  WASM_ASTAR.layerWrapperEl = getLayerWrapper();
+  
   const { debug, renderIntervalMs } = WASM_ASTAR;
   
   // Set up imports for wasm-bindgen
@@ -96,9 +99,14 @@ export const init = async (): Promise<void> => {
     throw new Error('WASM module does not have expected exports');
   }
   
+  const layerWrapperEl = WASM_ASTAR.layerWrapperEl;
+  if (!layerWrapperEl) {
+    throw new Error('layer_wrapper element not found');
+  }
+  
   window.addEventListener('mousemove', (e: MouseEvent) => {
-    const x = e.pageX - WASM_ASTAR.layerWrapperEl.offsetLeft;
-    const y = e.pageY - WASM_ASTAR.layerWrapperEl.offsetTop;
+    const x = e.pageX - layerWrapperEl.offsetLeft;
+    const y = e.pageY - layerWrapperEl.offsetTop;
     if (WASM_ASTAR.wasmModule) {
       WASM_ASTAR.wasmModule.mouse_move(x, y);
     }
@@ -116,7 +124,7 @@ export const init = async (): Promise<void> => {
     }
   });
   
-  WASM_ASTAR.layerWrapperEl.addEventListener('touchend', () => {
+  layerWrapperEl.addEventListener('touchend', () => {
     // Simulating spacebar for mobile support
     if (WASM_ASTAR.wasmModule) {
       WASM_ASTAR.wasmModule.key_down(32);
@@ -180,9 +188,13 @@ const getWasmImports = () => {
       scheduleNext();
     },
 
-    js_create_layer(id: string, key: number): void {
-      const canvasElement = document.createElement('canvas');
-      const canvas = WASM_ASTAR.layerWrapperEl.appendChild(canvasElement);
+        js_create_layer(id: string, key: number): void {
+          const wrapperEl = WASM_ASTAR.layerWrapperEl;
+          if (!wrapperEl) {
+            throw new Error('layer_wrapper element not found');
+          }
+          const canvasElement = document.createElement('canvas');
+          const canvas = wrapperEl.appendChild(canvasElement);
       if (!(canvas instanceof HTMLCanvasElement)) {
         throw new Error('Failed to create canvas element');
       }
@@ -226,7 +238,7 @@ const getWasmImports = () => {
     },
 
     js_set_screen_size(width: number, height: number, quality: number): void {
-      const wrapper = document.getElementById('layer_wrapper');
+      const wrapper = WASM_ASTAR.layerWrapperEl;
       if (wrapper) {
         wrapper.style.width = `${width / quality}px`;
         wrapper.style.height = `${height / quality}px`;

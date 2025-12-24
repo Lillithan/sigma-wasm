@@ -1,6 +1,7 @@
 import initWasm from '../../pkg/wasm_preprocess/wasm_preprocess.js';
 import type { WasmModulePreprocess } from '../types';
-import { validateWasmModule } from '../wasm/loader';
+import { loadWasmModule, validateWasmModule } from '../wasm/loader';
+import { WasmLoadError, WasmInitError } from '../wasm/types';
 
 interface PreprocessStats {
   original_size: number;
@@ -106,21 +107,89 @@ function validatePreprocessModule(exports: unknown): WasmModulePreprocess | null
 }
 
 export const init = async (): Promise<void> => {
+  const errorDiv = document.getElementById('error');
+  const loadingIndicator = document.getElementById('loadingIndicator');
+  const processImageBtn = document.getElementById('processImageBtn');
+  const processTextBtn = document.getElementById('processTextBtn');
+  
   try {
-    const initResult = await initWasm();
-    const validated = validatePreprocessModule(initResult);
-    
-    if (!validated) {
-      throw new Error('WASM module does not have expected exports');
+    // Show loading state
+    if (loadingIndicator) {
+      loadingIndicator.textContent = 'Loading SmolVLM WASM module...';
     }
     
-    wasmModule = validated;
+    // Disable buttons until WASM is ready
+    if (processImageBtn instanceof HTMLButtonElement) {
+      processImageBtn.disabled = true;
+    }
+    if (processTextBtn instanceof HTMLButtonElement) {
+      processTextBtn.disabled = true;
+    }
+    
+    // Use loadWasmModule for proper error handling
+    wasmModule = await loadWasmModule<WasmModulePreprocess>(
+      async () => await initWasm(),
+      validatePreprocessModule
+    );
+    
+    // Verify module is ready
+    if (!wasmModule) {
+      throw new WasmInitError('WASM module failed validation');
+    }
+    
+    // Hide loading, show ready state
+    if (loadingIndicator) {
+      loadingIndicator.textContent = 'SmolVLM WASM module ready!';
+      // Clear after 2 seconds using requestAnimationFrame
+      const startTime = performance.now();
+      const clearAfterDelay = (): void => {
+        if (loadingIndicator) {
+          const elapsed = performance.now() - startTime;
+          if (elapsed >= 2000) {
+            loadingIndicator.textContent = '';
+          } else {
+            requestAnimationFrame(clearAfterDelay);
+          }
+        }
+      };
+      requestAnimationFrame(clearAfterDelay);
+    }
+    
+    // Enable buttons now that WASM is ready
+    if (processImageBtn instanceof HTMLButtonElement) {
+      processImageBtn.disabled = false;
+    }
+    if (processTextBtn instanceof HTMLButtonElement) {
+      processTextBtn.disabled = false;
+    }
+    
+    // Setup UI only after WASM is confirmed ready
     setupUI();
   } catch (error) {
-    const errorDiv = document.getElementById('error');
+    // Clear loading indicator
+    if (loadingIndicator) {
+      loadingIndicator.textContent = '';
+    }
+    
+    // Disable buttons on error
+    if (processImageBtn instanceof HTMLButtonElement) {
+      processImageBtn.disabled = true;
+    }
+    if (processTextBtn instanceof HTMLButtonElement) {
+      processTextBtn.disabled = true;
+    }
+    
+    // Show detailed error
     if (errorDiv) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      errorDiv.textContent = `Failed to load WASM module: ${message}`;
+      if (error instanceof WasmLoadError) {
+        errorDiv.textContent = `Failed to load SmolVLM WASM: ${error.message}`;
+      } else if (error instanceof WasmInitError) {
+        errorDiv.textContent = `SmolVLM WASM initialization failed: ${error.message}`;
+      } else if (error instanceof Error) {
+        errorDiv.textContent = `Error: ${error.message}`;
+      } else {
+        errorDiv.textContent = 'Unknown error loading SmolVLM WASM module';
+      }
     }
   }
 };
@@ -133,6 +202,8 @@ function setupUI(): void {
   const imageOutputEl = document.getElementById('imageOutput');
   const textOutputEl = document.getElementById('textOutput');
   const statsOutputEl = document.getElementById('statsOutput');
+  const imagePreviewEl = document.getElementById('imagePreview');
+  const imagePreviewContainerEl = document.getElementById('imagePreviewContainer');
 
   if (
     !imageInputEl ||
@@ -142,11 +213,15 @@ function setupUI(): void {
     !imageOutputEl ||
     !textOutputEl ||
     !statsOutputEl ||
+    !imagePreviewEl ||
+    !imagePreviewContainerEl ||
     !(imageInputEl instanceof HTMLInputElement) ||
     !(textInputEl instanceof HTMLTextAreaElement) ||
     !(imageOutputEl instanceof HTMLCanvasElement) ||
     !(textOutputEl instanceof HTMLPreElement) ||
-    !(statsOutputEl instanceof HTMLDivElement)
+    !(statsOutputEl instanceof HTMLDivElement) ||
+    !(imagePreviewEl instanceof HTMLImageElement) ||
+    !(imagePreviewContainerEl instanceof HTMLDivElement)
   ) {
     throw new Error('Required UI elements not found');
   }
@@ -156,6 +231,35 @@ function setupUI(): void {
   const imageOutput = imageOutputEl;
   const textOutput = textOutputEl;
   const statsOutput = statsOutputEl;
+  const imagePreview = imagePreviewEl;
+  const imagePreviewContainer = imagePreviewContainerEl;
+
+  // Initially hide preview container
+  imagePreviewContainer.style.display = 'none';
+
+  // Handle file input change to show preview
+  imageInput.addEventListener('change', () => {
+    if (imageInput.files && imageInput.files.length > 0) {
+      const file = imageInput.files[0];
+      const url = URL.createObjectURL(file);
+      
+      imagePreview.onload = () => {
+        URL.revokeObjectURL(url);
+        imagePreviewContainer.style.display = 'block';
+      };
+      
+      imagePreview.onerror = () => {
+        URL.revokeObjectURL(url);
+        imagePreviewContainer.style.display = 'none';
+        alert('Failed to load image preview');
+      };
+      
+      imagePreview.src = url;
+    } else {
+      imagePreviewContainer.style.display = 'none';
+      imagePreview.src = '';
+    }
+  });
 
   processImageBtn.addEventListener('click', () => {
     if (!imageInput.files || imageInput.files.length === 0) {

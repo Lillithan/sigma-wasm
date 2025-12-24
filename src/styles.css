@@ -114,6 +114,19 @@ h1 {
   max-width: 100%;
 }
 
+#imagePreviewContainer {
+  margin: 1rem 0;
+  display: none;
+}
+
+#imagePreview {
+  max-width: 70vw;
+  height: auto;
+  border: 1px solid #333;
+  border-radius: 4px;
+  display: block;
+}
+
 #textOutput {
   background: #1e1e1e;
   padding: 1rem;
@@ -124,6 +137,12 @@ h1 {
 
 #statsOutput {
   margin-top: 1rem;
+}
+
+.loading-indicator {
+  color: #42b6ff;
+  margin: 1rem 0;
+  font-size: 0.9rem;
 }
 
 .nav-container {

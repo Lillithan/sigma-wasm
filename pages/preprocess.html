@@ -18,6 +18,7 @@
                 <a href="/preprocess" class="nav-link">Preprocessing</a>
             </nav>
             <div id="error" class="error-message"></div>
+            <div id="loadingIndicator" class="loading-indicator"></div>
             
             <div class="preprocess-section">
                 <h2>About SmolVLM & WASM Preprocessing</h2>
@@ -44,6 +45,9 @@
                 <h2>Image Preprocessing</h2>
                 <p>Upload an image to resize it to 384×384 (SmolVLM patch size) using high-quality Lanczos3 resizing</p>
                 <input type="file" id="imageInput" accept="image/*">
+                <div id="imagePreviewContainer">
+                    <img id="imagePreview" alt="Image preview">
+                </div>
                 <button id="processImageBtn">Process Image</button>
                 <div>
                     <canvas id="imageOutput"></canvas>

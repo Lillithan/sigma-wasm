@@ -26,7 +26,7 @@ export interface WasmAstar {
   debug: boolean;
   renderIntervalMs: number;
   layers: Map<number, Layer>;
-  layerWrapperEl: HTMLElement;
+  layerWrapperEl: HTMLElement | null;
 }
 
 // Preprocessing module types
