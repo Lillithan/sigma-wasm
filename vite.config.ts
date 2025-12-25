@@ -64,9 +64,34 @@ function copyDir(src: string, dest: string, moduleName: string): void {
       // For JS files, read, rewrite import.meta.url to use absolute paths, then write
       let content = readFileSync(srcPath, 'utf-8');
       
-      // Verify file has content before processing
+      // Verify source file has content before processing
       if (!content || content.length === 0) {
-        throw new Error(`Empty file: ${srcPath}`);
+        throw new Error(`Empty source file: ${srcPath}`);
+      }
+      
+      // Verify source file size is reasonable (should be at least 3KB for WASM modules)
+      // This catches incomplete files from the rust-builder stage
+      if (content.length < 3000 && entry.name.includes('wasm_') && !entry.name.includes('.d.ts')) {
+        const sourceExports = content.match(/export\s+(function|const|let|var)\s+(\w+)\s*[=(]/g) || [];
+        const sourceExportNames = sourceExports.map(exp => {
+          const match = exp.match(/export\s+(?:function|const|let|var)\s+(\w+)/);
+          return match ? match[1] : '';
+        }).filter(Boolean);
+        
+        throw new Error(
+          `Source file ${srcPath} is suspiciously small (${content.length} bytes, expected ~10KB). ` +
+          `This suggests the file from rust-builder stage is incomplete. ` +
+          `Source exports found: ${sourceExportNames.join(', ') || 'none'}`
+        );
+      }
+      
+      // Verify source file has exports before processing
+      const sourceExportCount = (content.match(/export\s+(function|const|let|var|default|{)/g) || []).length;
+      if (sourceExportCount === 0 && entry.name.includes('wasm_')) {
+        throw new Error(
+          `Source file ${srcPath} has no exports. This suggests the file from rust-builder stage is incomplete. ` +
+          `File size: ${content.length} bytes. First 200 chars: ${content.substring(0, 200)}`
+        );
       }
       
       // Rewrite: new URL('wasm_module_bg.wasm', import.meta.url)
@@ -80,15 +105,22 @@ function copyDir(src: string, dest: string, moduleName: string): void {
         }
       );
       
-      // Verify exports are preserved (check for export statements)
-      const exportCount = (content.match(/^export\s+(function|const|let|var|default|{)/gm) || []).length;
+      // Verify exports are preserved after processing (check for export statements)
+      const exportCount = (content.match(/export\s+(function|const|let|var|default|{)/g) || []).length;
       if (exportCount === 0 && entry.name.includes('wasm_')) {
-        throw new Error(`File ${destPath} appears to have no exports after processing`);
+        throw new Error(
+          `File ${destPath} appears to have no exports after processing. ` +
+          `Source had ${sourceExportCount} exports, processed has ${exportCount}. ` +
+          `This suggests the regex replacement broke the file.`
+        );
       }
       
-      // Verify file size is reasonable (should be at least 1KB for WASM modules)
-      if (content.length < 1000 && entry.name.includes('wasm_') && !entry.name.includes('.d.ts')) {
-        throw new Error(`File ${destPath} is suspiciously small (${content.length} bytes). Original: ${srcPath}`);
+      // Verify file size is reasonable after processing (should be at least 3KB for WASM modules)
+      if (content.length < 3000 && entry.name.includes('wasm_') && !entry.name.includes('.d.ts')) {
+        throw new Error(
+          `File ${destPath} is suspiciously small after processing (${content.length} bytes). ` +
+          `Source was ${readFileSync(srcPath, 'utf-8').length} bytes.`
+        );
       }
       
       writeFileSync(destPath, content, 'utf-8');
