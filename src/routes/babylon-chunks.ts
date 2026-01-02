@@ -99,6 +99,23 @@ const TILE_CONFIG = {
 } as const;
 
 /**
+ * Camera Configuration
+ * 
+ * **Learning Point**: Centralized camera configuration ensures consistent initial positioning
+ * and makes it easy to adjust camera settings without hunting through the codebase.
+ */
+const CAMERA_CONFIG = {
+  /** Initial horizontal rotation (alpha) in radians */
+  initialAlpha: 0,
+  /** Initial vertical rotation (beta) in radians - 0 = straight down (top view) */
+  initialBeta: 0,
+  /** Initial camera radius (distance from target) in meters */
+  initialRadius: 250,
+  /** Grid center position (target for camera) */
+  gridCenter: { x: 0, y: 0, z: 0 },
+} as const;
+
+/**
  * WASM module reference - stored as Record after validation
  */
 let wasmModuleRecord: Record<string, unknown> | null = null;
@@ -3345,15 +3362,18 @@ export const init = async (): Promise<void> => {
   const scene = new Scene(engine);
   
   // Set up camera - directly above the center of the grid
-  // Grid is 50x50 with offset positioning, so center is at (0, 0, 0)
-  // Camera positioned 50 meters directly above, looking straight down
-  const gridCenter = new Vector3(0, 0, 0);
+  // Uses CAMERA_CONFIG for initial positioning
+  const gridCenter = new Vector3(
+    CAMERA_CONFIG.gridCenter.x,
+    CAMERA_CONFIG.gridCenter.y,
+    CAMERA_CONFIG.gridCenter.z
+  );
   const camera = new ArcRotateCamera(
     'camera',
-    0,             // Alpha: horizontal rotation (doesn't matter when looking straight down)
-    0,             // Beta: 0 = straight down (top view)
-    50,            // Radius: 50 meters above the grid center
-    gridCenter,    // Target: center of the grid (0, 0, 0)
+    CAMERA_CONFIG.initialAlpha,  // Horizontal rotation
+    CAMERA_CONFIG.initialBeta,   // Vertical rotation (0 = straight down, top view)
+    CAMERA_CONFIG.initialRadius, // Distance from target
+    gridCenter,                   // Target: center of the grid
     scene
   );
   camera.attachControl(canvas, true);
@@ -4040,11 +4060,11 @@ export const init = async (): Promise<void> => {
         // Update global rings
         currentRings = selectedRings;
         
-        // Reset camera to initial position and rotation
-        camera.alpha = 0; // Horizontal rotation
-        camera.beta = 0; // Vertical rotation (0 = straight down)
-        camera.radius = 50; // Distance from target
-        camera.setTarget(gridCenter); // Target center of grid
+        // Reset camera to initial position and rotation from config
+        camera.alpha = CAMERA_CONFIG.initialAlpha;
+        camera.beta = CAMERA_CONFIG.initialBeta;
+        camera.radius = CAMERA_CONFIG.initialRadius;
+        camera.setTarget(gridCenter);
         
         // Clear all state
         if (WASM_BABYLON_CHUNKS.wasmModule) {
