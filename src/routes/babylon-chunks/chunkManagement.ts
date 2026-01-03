@@ -7,6 +7,7 @@
 
 import type { TileType } from '../../types';
 import * as HexUtils from './hexUtils';
+import type { InstancedMesh } from '@babylonjs/core';
 
 /**
  * Tile entry in a chunk's grid
@@ -14,6 +15,8 @@ import * as HexUtils from './hexUtils';
 export interface ChunkTile {
   hex: HexUtils.HexCoord;
   tileType: TileType | null;
+  enabled: boolean;
+  meshInstance: InstancedMesh | null;
 }
 
 /**
@@ -55,6 +58,8 @@ export class Chunk {
         validatedGrid.push({
           hex,
           tileType: null,
+          enabled: true,
+          meshInstance: null,
         });
       }
     }
@@ -137,18 +142,28 @@ export class Chunk {
       offsetR = rings + 1;
     }
     
-    // Rotate the offset vector 60 degrees counter-clockwise 6 times
-    // Rotation formula in axial coordinates: (q, r) -> (-r, q+r)
+    // Rotate the starting offset by -120 degrees (4 steps clockwise) to correct angular alignment
+    // This compensates for the 120-degree offset in the coordinate system
     let currentQ = offsetQ;
     let currentR = offsetR;
+    for (let i = 0; i < 4; i++) {
+      const nextQ = currentQ + currentR;
+      const nextR = -currentQ;
+      currentQ = nextQ;
+      currentR = nextR;
+    }
+    
+    // Rotate the offset vector 60 degrees clockwise 6 times
+    // Rotation formula in axial coordinates for clockwise: (q, r) -> (q+r, -q)
+    // Note: Using clockwise rotation for right-handed coordinate system (BabylonJS)
     
     for (let i = 0; i < 6; i++) {
       // Add the current offset to the center
       neighbors.push({ q: center.q + currentQ, r: center.r + currentR });
       
-      // Rotate 60 degrees counter-clockwise: (q, r) -> (-r, q+r)
-      const nextQ = -currentR;
-      const nextR = currentQ + currentR;
+      // Rotate 60 degrees clockwise: (q, r) -> (q+r, -q)
+      const nextQ = currentQ + currentR;
+      const nextR = -currentQ;
       currentQ = nextQ;
       currentR = nextR;
     }
@@ -158,13 +173,23 @@ export class Chunk {
 
   /**
    * Set the enabled state of the chunk's tiles
-   * Updates the enabled property accordingly
+   * Iterates over all tiles in the chunk's grid and sets their enabled state
+   * Calls mesh.setEnabled() on each tile's mesh instance
    * 
-   * Note: This method updates the chunk's enabled state.
-   * Actual mesh visibility is controlled during rendering.
+   * @param enabled - Whether to enable or disable all tiles in this chunk
    */
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
+    
+    // Iterate over all tiles in the chunk's grid and set their enabled state
+    for (const tile of this.grid) {
+      tile.enabled = enabled;
+      
+      // Set enabled state on the mesh instance if it exists
+      if (tile.meshInstance) {
+        tile.meshInstance.setEnabled(enabled);
+      }
+    }
   }
 
   /**
@@ -213,10 +238,11 @@ export class WorldMap {
 
   /**
    * Create a new chunk at the specified position
+   * If chunk already exists, returns the existing chunk (never re-creates)
    * @param positionHex - Central cell position in hex space (q, r)
    * @param rings - Number of rings around the center
    * @param hexSize - Size of hexagon for coordinate conversion
-   * @returns The created chunk
+   * @returns The created or existing chunk
    */
   createChunk(
     positionHex: HexUtils.HexCoord,
@@ -225,13 +251,14 @@ export class WorldMap {
   ): Chunk {
     const key = this.getChunkKey(positionHex);
     
-    // Check if chunk already exists
+    // Check if chunk already exists - never re-create existing chunks
     const existing = this.chunks.get(key);
     if (existing) {
+      // Chunk already exists, return it without modification
       return existing;
     }
     
-    // Create new chunk
+    // Create new chunk only if it doesn't exist
     const chunk = new Chunk(positionHex, rings, hexSize);
     this.chunks.set(key, chunk);
     
@@ -266,5 +293,69 @@ export class WorldMap {
   getChunkCount(): number {
     return this.chunks.size;
   }
+}
+
+/**
+ * Determine which chunk contains a given tile
+ * A tile belongs to the chunk whose center is closest to the tile and within the chunk's boundary.
+ * 
+ * @param tileHex - Hex coordinate of the tile
+ * @param rings - Number of rings per chunk
+ * @param existingChunks - Array of existing chunks to check
+ * @returns Chunk position (hex coordinate) that contains the tile, or null if no chunk found
+ */
+export function getChunkForTile(
+  tileHex: HexUtils.HexCoord,
+  rings: number,
+  existingChunks: Array<Chunk>
+): HexUtils.HexCoord | null {
+  if (existingChunks.length === 0) {
+    return null;
+  }
+
+  let closestChunk: HexUtils.HexCoord | null = null;
+  let minDistance = Number.POSITIVE_INFINITY;
+
+  // First, check if the tile itself is a chunk center (distance 0)
+  // In this case, the chunk position should match the tile position
+  for (const chunk of existingChunks) {
+    const chunkPos = chunk.getPositionHex();
+    const distance = HexUtils.HEX_UTILS.distance(tileHex.q, tileHex.r, chunkPos.q, chunkPos.r);
+
+    // If tile is exactly at chunk center, return immediately
+    if (distance === 0) {
+      return chunkPos;
+    }
+
+    // Check if tile is within this chunk's boundary (distance <= rings)
+    if (distance <= rings) {
+      // If multiple chunks contain this tile (overlap at boundaries), prefer the closest center
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestChunk = chunkPos;
+      }
+    }
+  }
+
+  // If we found a chunk that contains the tile, return it
+  if (closestChunk !== null) {
+    return closestChunk;
+  }
+
+  // No chunk contains this tile (all chunks are at distance > rings)
+  return null;
+}
+
+/**
+ * Calculate chunk radius for distance threshold calculations
+ * The chunk radius is the distance from chunk center to the outer boundary
+ * 
+ * @param rings - Number of rings per chunk
+ * @returns Chunk radius in hex distance units
+ */
+export function calculateChunkRadius(rings: number): number {
+  // The chunk radius is simply the number of rings
+  // This represents the maximum hex distance from center to outer boundary
+  return rings;
 }
 

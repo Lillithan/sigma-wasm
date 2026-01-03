@@ -4,16 +4,16 @@
  * Handles BabylonJS engine, scene, rendering, and UI setup.
  */
 
-import { Engine, Scene, ArcRotateCamera, HemisphericLight, DirectionalLight, Vector3, Mesh, Color3, Color4, Matrix, Quaternion, PBRMaterial, CreateLines, StandardMaterial, DynamicTexture } from '@babylonjs/core';
+import { Engine, Scene, ArcRotateCamera, HemisphericLight, DirectionalLight, Vector3, Mesh, Color3, Color4, CreateLines, StandardMaterial, DynamicTexture, InstancedMesh } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
 import { SceneLoader } from '@babylonjs/core';
-import '@babylonjs/core/Meshes/thinInstanceMesh';
-import { AdvancedDynamicTexture, Button, Control } from '@babylonjs/gui';
+import { AdvancedDynamicTexture, Button, Control, TextBlock, Rectangle } from '@babylonjs/gui';
 import type { TileType, LayoutConstraints } from '../../types';
 import type { WasmManager } from './wasmManagement';
 import { tileTypeFromNumber, tileTypeToNumber } from './wasmManagement';
 import * as HexUtils from './hexUtils';
 import type { WorldMap } from './chunkManagement';
+import { CameraManager } from './cameraManager';
 
 /**
  * Tile Configuration - centralized tile dimensions
@@ -45,9 +45,9 @@ export function getTileColor(tileType: TileType): Color3 {
     case 'grass':
       return new Color3(0.2, 0.8, 0.2); // Green
     case 'building':
-      return new Color3(0.96, 0.46, 0.96); // Off-white
+      return new Color3(0.96, 0.96, 0.96); // Off-white
     case 'road':
-      return new Color3(0.126, 0.036, 0.126); // Very dark gray
+      return new Color3(0.326, 0.336, 0.326); // Very dark gray
     case 'forest':
       return new Color3(0.05, 0.3, 0.05); // Dark green
     case 'water':
@@ -117,15 +117,18 @@ export function hideThinkingAnimation(
 export class CanvasManager {
   private engine: Engine | null = null;
   private scene: Scene | null = null;
-  private camera: ArcRotateCamera | null = null;
+  private cameraManager: CameraManager | null = null;
   private baseMeshes: Map<string, Mesh> = new Map();
-  private materials: Map<TileType['type'], PBRMaterial> = new Map();
+  private materials: Map<TileType['type'], StandardMaterial> = new Map();
   private currentRings = 1;
   private wasmManager: WasmManager;
   private logFn: ((message: string, type?: 'info' | 'success' | 'warning' | 'error') => void) | null;
   private generatePreConstraintsFn: ((constraints: LayoutConstraints) => Array<{ q: number; r: number; tileType: TileType }>) | null = null;
   private worldMap: WorldMap | null = null;
   private isTestMode: boolean = false;
+  private currentTileText: TextBlock | null = null;
+  private previousTileText: TextBlock | null = null;
+  private currentChunkText: TextBlock | null = null;
 
   constructor(
     wasmManager: WasmManager,
@@ -186,22 +189,10 @@ export class CanvasManager {
     // Create scene
     this.scene = new Scene(this.engine);
     
-    // Set up camera - directly above the center of the grid
-    // Uses CAMERA_CONFIG for initial positioning
-    const gridCenter = new Vector3(
-      CAMERA_CONFIG.gridCenter.x,
-      CAMERA_CONFIG.gridCenter.y,
-      CAMERA_CONFIG.gridCenter.z
-    );
-    this.camera = new ArcRotateCamera(
-      'camera',
-      CAMERA_CONFIG.initialAlpha,  // Horizontal rotation
-      CAMERA_CONFIG.initialBeta,   // Vertical rotation (0 = straight down, top view)
-      CAMERA_CONFIG.initialRadius, // Distance from target
-      gridCenter,                   // Target: center of the grid
-      this.scene
-    );
-    this.camera.attachControl(canvas, true);
+    // Set up camera manager with default mode 'simple-follow'
+    if (this.scene) {
+      this.cameraManager = new CameraManager(this.scene, canvas, 'simple-follow');
+    }
     
     // Set up lighting
     const hemisphericLight = new HemisphericLight('hemisphericLight', new Vector3(0, 1, 0), this.scene);
@@ -325,25 +316,8 @@ export class CanvasManager {
       // Use model at its actual size (scale 1.0)
       baseMesh.scaling = new Vector3(1.0, 1.0, 1.0);
       
-      // Remove existing materials from the base mesh and all its children
-      const removeMaterialsRecursively = (mesh: Mesh): void => {
-        if (mesh.material) {
-          mesh.material.dispose();
-          mesh.material = null;
-        }
-        const childMeshes = mesh.getChildMeshes();
-        for (const childMesh of childMeshes) {
-          if (childMesh instanceof Mesh) {
-            removeMaterialsRecursively(childMesh);
-          }
-        }
-      };
-      removeMaterialsRecursively(baseMesh);
-      
-      // Hide the base mesh (we'll use instances only)
-      baseMesh.isVisible = false;
-      
-      // Create materials for each tile type
+      // Create a base mesh for each tile type with its own material
+      // This matches the working pattern from babylon-wfc.ts
       const tileTypes: TileType[] = [
         { type: 'grass' },
         { type: 'building' },
@@ -353,15 +327,28 @@ export class CanvasManager {
       ];
       
       for (const tileType of tileTypes) {
-        const material = new PBRMaterial(`material_${tileType.type}`, this.scene);
+        // Clone the base mesh for each tile type
+        const clonedMesh = baseMesh.clone(`base_${tileType.type}`);
+        clonedMesh.isVisible = false;
+        clonedMesh.setEnabled(false);
+        
+        // Create material for this tile type
+        const material = new StandardMaterial(`material_${tileType.type}`, this.scene);
         const color = getTileColor(tileType);
-        material.albedoColor = color;
-        material.unlit = true; // Disable lighting to match legend colors exactly
+        material.diffuseColor = color;
+        material.specularColor = new Color3(0.1, 0.1, 0.1); // Low specular
+        
+        // Assign material to the cloned mesh
+        clonedMesh.material = material;
+        
+        // Store both the base mesh and material
+        this.baseMeshes.set(tileType.type, clonedMesh);
         this.materials.set(tileType.type, material);
       }
       
-      // Store the single base mesh
-      this.baseMeshes.set('base', baseMesh);
+      // Hide and disable the original base mesh
+      baseMesh.isVisible = false;
+      baseMesh.setEnabled(false);
       
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -556,16 +543,130 @@ export class CanvasManager {
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    // Create tile/chunk info overlay in top left
+    this.createTileChunkOverlay(advancedTexture);
+  }
+
+  /**
+   * Create tile/chunk info overlay in top left
+   */
+  private createTileChunkOverlay(advancedTexture: AdvancedDynamicTexture): void {
+    // Create background rectangle for better visibility
+    const background = new Rectangle('tileChunkBackground');
+    background.width = '200px';
+    background.height = '85px';
+    background.color = 'transparent';
+    background.background = 'rgba(0, 0, 0, 0.5)';
+    background.thickness = 2;
+    background.cornerRadius = 5;
+    background.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    background.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    background.top = '1%';
+    background.left = '1%';
+    advancedTexture.addControl(background);
+
+    // Current Tile label
+    const tileLabel = new TextBlock('tileLabel', 'Current Tile:');
+    tileLabel.color = 'white';
+    tileLabel.fontSize = 14;
+    tileLabel.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    tileLabel.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    tileLabel.paddingTop = '5px';
+    tileLabel.paddingLeft = '10px';
+    background.addControl(tileLabel);
+
+    // Current Tile value - positioned right after the label
+    this.currentTileText = new TextBlock('currentTileText', '(-, -)');
+    this.currentTileText.color = '#003300';
+    this.currentTileText.fontSize = 14;
+    this.currentTileText.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    this.currentTileText.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    this.currentTileText.paddingTop = '5px';
+    this.currentTileText.paddingLeft = '0px';
+    this.currentTileText.left = '115px'; // Position after "Current Tile: " label with extra spacing
+    background.addControl(this.currentTileText);
+
+    // Previous Tile label
+    const previousTileLabel = new TextBlock('previousTileLabel', 'Previous Tile:');
+    previousTileLabel.color = 'white';
+    previousTileLabel.fontSize = 14;
+    previousTileLabel.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    previousTileLabel.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    previousTileLabel.paddingTop = '25px';
+    previousTileLabel.paddingLeft = '10px';
+    background.addControl(previousTileLabel);
+
+    // Previous Tile value - positioned right after the label
+    this.previousTileText = new TextBlock('previousTileText', '(-, -)');
+    this.previousTileText.color = 'orange';
+    this.previousTileText.fontSize = 14;
+    this.previousTileText.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    this.previousTileText.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    this.previousTileText.paddingTop = '25px';
+    this.previousTileText.paddingLeft = '0px';
+    this.previousTileText.left = '115px'; // Position after "Previous Tile: " label with extra spacing
+    background.addControl(this.previousTileText);
+
+    // Current Chunk label
+    const chunkLabel = new TextBlock('chunkLabel', 'Current Chunk:');
+    chunkLabel.color = 'white';
+    chunkLabel.fontSize = 14;
+    chunkLabel.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    chunkLabel.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    chunkLabel.paddingTop = '45px';
+    chunkLabel.paddingLeft = '10px';
+    background.addControl(chunkLabel);
+
+    // Current Chunk value - positioned right after the label
+    this.currentChunkText = new TextBlock('currentChunkText', '(-, -)');
+    this.currentChunkText.color = '#003300';
+    this.currentChunkText.fontSize = 14;
+    this.currentChunkText.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    this.currentChunkText.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    this.currentChunkText.paddingTop = '45px';
+    this.currentChunkText.paddingLeft = '0px';
+    this.currentChunkText.left = '115px'; // Position after "Current Chunk: " label with extra spacing
+    background.addControl(this.currentChunkText);
+  }
+
+  /**
+   * Update the tile/chunk display
+   */
+  updateTileChunkDisplay(
+    tileHex: { q: number; r: number } | null, 
+    chunkHex: { q: number; r: number } | null,
+    previousTileHex: { q: number; r: number } | null = null
+  ): void {
+    if (this.currentTileText) {
+      if (tileHex) {
+        this.currentTileText.text = `(${tileHex.q}, ${tileHex.r})`;
+      } else {
+        this.currentTileText.text = '(-, -)';
+      }
+    }
+    
+    if (this.previousTileText) {
+      if (previousTileHex) {
+        this.previousTileText.text = `(${previousTileHex.q}, ${previousTileHex.r})`;
+      } else {
+        this.previousTileText.text = '(-, -)';
+      }
+    }
+    
+    if (this.currentChunkText) {
+      if (chunkHex) {
+        this.currentChunkText.text = `(${chunkHex.q}, ${chunkHex.r})`;
+      } else {
+        this.currentChunkText.text = '(-, -)';
+      }
+    }
   }
 
   /**
    * Render the WFC grid
    */
   renderGrid(constraints?: LayoutConstraints): void {
-    const baseMeshForCleanup = this.baseMeshes.get('base');
-    if (baseMeshForCleanup) {
-      baseMeshForCleanup.thinInstanceCount = 0;
-    }
     
     const wasmModule = this.wasmManager.getModule();
     if (!wasmModule) {
@@ -694,7 +795,9 @@ export class CanvasManager {
     const hexSize = TILE_CONFIG.hexSize;
     const hexHeight = TILE_CONFIG.hexHeight;
     
-    const baseMesh = this.baseMeshes.get('base');
+    // Get any base mesh (they're all the same geometry, just different materials)
+    // Use grass as default since it should always exist
+    const baseMesh = this.baseMeshes.get('grass');
     if (!baseMesh) {
       this.log('Base mesh not found for rendering', 'error');
       return;
@@ -725,6 +828,12 @@ export class CanvasManager {
         
         for (const chunkTile of chunkGrid) {
           totalTilesChecked++;
+          
+          // Skip disabled tiles
+          if (!chunkTile.enabled) {
+            continue;
+          }
+          
           // Query WASM for tile type at this hex coordinate
           const tileNum = wasmModule.get_tile_at(chunkTile.hex.q, chunkTile.hex.r);
           const tileType = tileTypeFromNumber(tileNum);
@@ -899,40 +1008,56 @@ export class CanvasManager {
           }
         }
         
-        // Log some tiles from neighbor chunks to verify they're in the render list
-        const neighborChunkTiles: Array<{ chunk: string; hex: string; world: string }> = [];
-        for (const tile of validHexes) {
-          // Check if this tile is from a neighbor chunk (not origin)
-          for (const chunk of enabledChunks) {
-            const chunkPos = chunk.getPositionHex();
-            if (chunkPos.q === 0 && chunkPos.r === 0) {
-              continue; // Skip origin chunk
-            }
-            const chunkGrid = chunk.getGrid();
-            const belongsToChunk = chunkGrid.some((ct) => ct.hex.q === tile.hex.q && ct.hex.r === tile.hex.r);
-            if (belongsToChunk) {
-              neighborChunkTiles.push({
-                chunk: `(${chunkPos.q}, ${chunkPos.r})`,
-                hex: `(${tile.hex.q}, ${tile.hex.r})`,
-                world: `(${tile.worldPos.x.toFixed(2)}, ${tile.worldPos.z.toFixed(2)})`,
+        // Log ALL tiles from neighbor chunks to verify they're in the render list
+        for (const chunk of enabledChunks) {
+          const chunkPos = chunk.getPositionHex();
+          if (chunkPos.q === 0 && chunkPos.r === 0) {
+            continue; // Skip origin chunk
+          }
+          
+          const chunkGrid = chunk.getGrid();
+          const chunkTilesInRender: Array<{ hex: string; world: string }> = [];
+          
+          // Iterate over ALL tiles in the chunk's grid
+          for (const chunkTile of chunkGrid) {
+            // Check if this tile is in the render list
+            const hexKey = `${chunkTile.hex.q},${chunkTile.hex.r}`;
+            const tileData = tileMap.get(hexKey);
+            
+            if (tileData) {
+              chunkTilesInRender.push({
+                hex: `(${chunkTile.hex.q}, ${chunkTile.hex.r})`,
+                world: `(${tileData.worldPos.x.toFixed(2)}, ${tileData.worldPos.z.toFixed(2)})`,
               });
-              if (neighborChunkTiles.length >= 5) {
-                break;
-              }
             }
           }
-          if (neighborChunkTiles.length >= 5) {
-            break;
+          
+          if (chunkTilesInRender.length > 0) {
+            const chunkWorldPos = chunk.getPositionCartesian();
+            const centerTile = chunkGrid.find((ct) => ct.hex.q === chunkPos.q && ct.hex.r === chunkPos.r);
+            const centerTileWorldPos = centerTile ? HexUtils.HEX_UTILS.hexToWorld(centerTile.hex.q, centerTile.hex.r, hexSize) : null;
+            
+            this.log(`Chunk (${chunkPos.q}, ${chunkPos.r}) tiles in render (${chunkTilesInRender.length} of ${chunkGrid.length}):`, 'info');
+            this.log(`  Chunk center world position: (${chunkWorldPos.x.toFixed(2)}, ${chunkWorldPos.z.toFixed(2)})`, 'info');
+            if (centerTile) {
+              this.log(`  Center tile hex: (${centerTile.hex.q}, ${centerTile.hex.r})`, 'info');
+              if (centerTileWorldPos) {
+                this.log(`  Center tile world position: (${centerTileWorldPos.x.toFixed(2)}, ${centerTileWorldPos.z.toFixed(2)})`, 'info');
+                const xDiff = Math.abs(chunkWorldPos.x - centerTileWorldPos.x);
+                const zDiff = Math.abs(chunkWorldPos.z - centerTileWorldPos.z);
+                if (xDiff > 0.01 || zDiff > 0.01) {
+                  this.log(`  MISMATCH: Chunk center world pos does not match center tile world pos! (x diff: ${xDiff.toFixed(2)}, z diff: ${zDiff.toFixed(2)})`, 'error');
+                }
+              }
+            } else {
+              this.log(`  ERROR: Center tile (${chunkPos.q}, ${chunkPos.r}) not found in chunk grid!`, 'error');
+            }
+            for (const tile of chunkTilesInRender) {
+              this.log(`  tile at hex ${tile.hex} -> world ${tile.world}`, 'info');
+            }
+          } else {
+            this.log(`WARNING: Chunk (${chunkPos.q}, ${chunkPos.r}) has no tiles in render!`, 'error');
           }
-        }
-        
-        if (neighborChunkTiles.length > 0) {
-          this.log(`Sample neighbor chunk tiles in render:`, 'info');
-          for (const sample of neighborChunkTiles) {
-            this.log(`  Chunk ${sample.chunk} tile at hex ${sample.hex} -> world ${sample.world}`, 'info');
-          }
-        } else {
-          this.log('WARNING: No neighbor chunk tiles found in final render!', 'error');
         }
       }
     } else {
@@ -974,124 +1099,164 @@ export class CanvasManager {
       }
     }
     
-    const numInstances = validHexes.length;
-    
-    if (numInstances === 0) {
-      if (this.logFn) {
-        this.log('No valid hexes to render', 'warning');
-      }
+    // Create or update individual mesh instances for each tile
+    if (!this.scene) {
+      this.log('Scene not initialized', 'error');
       return;
     }
     
-    if (this.logFn) {
-      this.log(`Creating ${numInstances} thin instances`, 'info');
-      
-      // Log sample positions from different areas
-      if (validHexes.length > 0) {
-        const firstTile = validHexes[0];
-        const middleTile = validHexes[Math.floor(validHexes.length / 2)];
-        const lastTile = validHexes[validHexes.length - 1];
-        
-        if (firstTile && middleTile && lastTile) {
-          this.log(`Sample positions - First: (${firstTile.worldPos.x.toFixed(2)}, ${firstTile.worldPos.z.toFixed(2)}), Middle: (${middleTile.worldPos.x.toFixed(2)}, ${middleTile.worldPos.z.toFixed(2)}), Last: (${lastTile.worldPos.x.toFixed(2)}, ${lastTile.worldPos.z.toFixed(2)})`, 'info');
-        }
-        
-        // Find min/max positions
-        let minX = Number.POSITIVE_INFINITY;
-        let maxX = Number.NEGATIVE_INFINITY;
-        let minZ = Number.POSITIVE_INFINITY;
-        let maxZ = Number.NEGATIVE_INFINITY;
-        
-        for (const tile of validHexes) {
-          minX = Math.min(minX, tile.worldPos.x);
-          maxX = Math.max(maxX, tile.worldPos.x);
-          minZ = Math.min(minZ, tile.worldPos.z);
-          maxZ = Math.max(maxZ, tile.worldPos.z);
-        }
-        
-        this.log(`World bounds - X: [${minX.toFixed(2)}, ${maxX.toFixed(2)}], Z: [${minZ.toFixed(2)}, ${maxZ.toFixed(2)}]`, 'info');
-      }
+    // Track which tiles need instances created/updated
+    const tilesToProcess = new Map<string, { hex: { q: number; r: number }; tileType: TileType; worldPos: Vector3 }>();
+    for (const tile of validHexes) {
+      const hexKey = `${tile.hex.q},${tile.hex.r}`;
+      tilesToProcess.set(hexKey, tile);
     }
     
-    const matrices = new Float32Array(numInstances * 16);
-    const bufferColors = new Float32Array(numInstances * 4);
-    const baseMeshScaling = baseMesh.scaling.clone();
-    
-    for (let i = 0; i < numInstances; i++) {
-      const { tileType, worldPos } = validHexes[i];
-      const translation = new Vector3(worldPos.x, worldPos.y, worldPos.z);
-      const scaling = baseMeshScaling.clone();
-      const rotation = Quaternion.Identity();
-      const matrix = Matrix.Compose(scaling, rotation, translation);
-      matrix.copyToArray(matrices, i * 16);
+    // Update or create instances for tiles in enabled chunks
+    if (this.worldMap) {
+      const enabledChunks = this.worldMap.getEnabledChunks();
+      let instancesCreated = 0;
+      let instancesUpdated = 0;
       
-      const color = getTileColor(tileType);
-      bufferColors[i * 4] = color.r;
-      bufferColors[i * 4 + 1] = color.g;
-      bufferColors[i * 4 + 2] = color.b;
-      bufferColors[i * 4 + 3] = 1.0;
-    }
-    
-    // Verify sample matrices have correct positions
-    if (this.logFn && numInstances > 0) {
-      // Check first, middle, and last matrices
-      const indicesToCheck = [0, Math.floor(numInstances / 2), numInstances - 1];
-      for (const idx of indicesToCheck) {
-        if (idx < numInstances) {
-          const matrixStart = idx * 16;
-          // Matrix translation is at indices 12, 13, 14 (m[12], m[13], m[14])
-          const matrixX = matrices[matrixStart + 12];
-          const matrixY = matrices[matrixStart + 13];
-          const matrixZ = matrices[matrixStart + 14];
-          const expectedTile = validHexes[idx];
-          if (expectedTile) {
-            this.log(`Matrix ${idx}: translation (${matrixX.toFixed(2)}, ${matrixY.toFixed(2)}, ${matrixZ.toFixed(2)}), expected (${expectedTile.worldPos.x.toFixed(2)}, ${expectedTile.worldPos.y.toFixed(2)}, ${expectedTile.worldPos.z.toFixed(2)})`, 'info');
+      for (const chunk of enabledChunks) {
+        const chunkGrid = chunk.getGrid();
+        
+        for (const chunkTile of chunkGrid) {
+          // Skip disabled tiles
+          if (!chunkTile.enabled) {
+            // Dispose of instance if it exists
+            if (chunkTile.meshInstance) {
+              chunkTile.meshInstance.dispose();
+              chunkTile.meshInstance = null;
+            }
+            continue;
           }
+          
+          const hexKey = `${chunkTile.hex.q},${chunkTile.hex.r}`;
+          const tileData = tilesToProcess.get(hexKey);
+          
+          if (!tileData) {
+            // Tile should not be rendered, dispose instance if exists
+            if (chunkTile.meshInstance) {
+              chunkTile.meshInstance.dispose();
+              chunkTile.meshInstance = null;
+            }
+            continue;
+          }
+          
+          // Get the base mesh for this tile type (each tile type has its own base mesh with material)
+          const tileTypeBaseMesh = this.baseMeshes.get(tileData.tileType.type);
+          if (!tileTypeBaseMesh) {
+            continue;
+          }
+          
+          // Create instance if it doesn't exist
+          if (!chunkTile.meshInstance) {
+            const instanceName = `tile_${chunkTile.hex.q}_${chunkTile.hex.r}`;
+            chunkTile.meshInstance = tileTypeBaseMesh.createInstance(instanceName);
+            instancesCreated++;
+          }
+          
+          // Update instance position
+          const instance = chunkTile.meshInstance;
+          instance.position = tileData.worldPos.clone();
+          
+          // Instance already has the correct material from its base mesh
+          // Ensure instance is visible and enabled
+          instance.isVisible = true;
+          instance.setEnabled(true);
+          instancesUpdated++;
         }
+      }
+      
+      if (this.logFn) {
+        this.log(`Created ${instancesCreated} new instances, updated ${instancesUpdated} instances`, 'info');
+      }
+    } else {
+      // Fallback: create instances for non-chunk rendering
+      // This is a simplified version for the fallback case
+      let instancesCreated = 0;
+      
+      for (const tile of validHexes) {
+        // Get the base mesh for this tile type
+        const tileTypeBaseMesh = this.baseMeshes.get(tile.tileType.type);
+        if (!tileTypeBaseMesh) {
+          continue;
+        }
+        
+        const instanceName = `tile_${tile.hex.q}_${tile.hex.r}`;
+        const existingInstance = this.scene.getMeshByName(instanceName);
+        
+        if (existingInstance instanceof InstancedMesh) {
+          existingInstance.position = tile.worldPos.clone();
+          existingInstance.isVisible = true;
+          existingInstance.setEnabled(true);
+        } else {
+          const instance = tileTypeBaseMesh.createInstance(instanceName);
+          instance.position = tile.worldPos.clone();
+          instance.isVisible = true;
+          instance.setEnabled(true);
+          instancesCreated++;
+        }
+      }
+      
+      if (this.logFn) {
+        this.log(`Created ${instancesCreated} instances for fallback rendering`, 'info');
       }
     }
     
-    baseMesh.thinInstanceSetBuffer("matrix", matrices, 16);
-    // Use "instanceColor" attribute name for thin instance colors (not "color")
-    baseMesh.thinInstanceSetBuffer("instanceColor", bufferColors, 4);
-    baseMesh.thinInstanceCount = numInstances;
-    
-    if (this.logFn) {
-      this.log(`Rendered ${numInstances} instances (baseMesh.thinInstanceCount = ${baseMesh.thinInstanceCount})`, 'info');
-    }
-    
-    const baseMaterial = this.materials.get('grass');
-    if (baseMaterial) {
-      baseMesh.material = baseMaterial;
-    }
-    
-    baseMesh.isVisible = true;
+    // Base mesh should remain hidden - instances render independently
+    // Instances don't need the base mesh to be visible
+    baseMesh.isVisible = false;
+    baseMesh.setEnabled(false);
   }
 
   /**
    * Reset camera to initial position
    */
   resetCamera(): void {
-    if (!this.camera || !this.scene) {
+    if (!this.cameraManager) {
       return;
     }
 
-    const gridCenter = new Vector3(
-      CAMERA_CONFIG.gridCenter.x,
-      CAMERA_CONFIG.gridCenter.y,
-      CAMERA_CONFIG.gridCenter.z
-    );
-    this.camera.alpha = CAMERA_CONFIG.initialAlpha;
-    this.camera.beta = CAMERA_CONFIG.initialBeta;
-    this.camera.radius = CAMERA_CONFIG.initialRadius;
-    this.camera.setTarget(gridCenter);
+    // Reset to free camera mode with initial settings
+    this.cameraManager.setMode('free');
+    const camera = this.cameraManager.getCamera();
+    if (camera) {
+      const gridCenter = new Vector3(
+        CAMERA_CONFIG.gridCenter.x,
+        CAMERA_CONFIG.gridCenter.y,
+        CAMERA_CONFIG.gridCenter.z
+      );
+      camera.alpha = CAMERA_CONFIG.initialAlpha;
+      camera.beta = CAMERA_CONFIG.initialBeta;
+      camera.radius = CAMERA_CONFIG.initialRadius;
+      camera.setTarget(gridCenter);
+    }
   }
 
   /**
    * Get the camera
    */
   getCamera(): ArcRotateCamera | null {
-    return this.camera;
+    if (this.cameraManager) {
+      return this.cameraManager.getCamera();
+    }
+    return null;
+  }
+
+  /**
+   * Get the camera manager
+   */
+  getCameraManager(): CameraManager | null {
+    return this.cameraManager;
+  }
+
+  /**
+   * Get the scene
+   */
+  getScene(): Scene | null {
+    return this.scene;
   }
 
   /**
@@ -1173,7 +1338,11 @@ export class CanvasManager {
       this.engine = null;
     }
 
-    this.camera = null;
+    if (this.cameraManager) {
+      this.cameraManager.dispose();
+      this.cameraManager = null;
+    }
+
     this.baseMeshes.clear();
     this.materials.clear();
     this.worldMap = null;
