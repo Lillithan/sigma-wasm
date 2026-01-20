@@ -46,6 +46,15 @@ impl HelloState {
     fn set_message(&mut self, message: String) {
         self.message = message;
     }
+    /// Get the current color
+    fn get_color(&self) -> String {
+        self.color.clone()
+    }
+    
+    /// Set a new color
+    fn set_color(&mut self, color: String) {
+        self.color =color;
+    }
 }
 
 /// Global state using the LazyLock<Mutex<State>> pattern
@@ -129,5 +138,32 @@ pub fn get_message() -> String {
 pub fn set_message(message: String) {
     let mut state = HELLO_STATE.lock().unwrap();
     state.set_message(message);
+}
+
+/// Get the current color
+/// 
+/// **Learning Point**: Strings in Rust need to be converted to JavaScript strings.
+/// `wasm-bindgen` handles this automatically when you return a `String` from a
+/// `#[wasm_bindgen]` function.
+/// 
+/// @returns The current color as a JavaScript string
+#[wasm_bindgen]
+pub fn get_color() -> String {
+    let state = HELLO_STATE.lock().unwrap();
+    state.get_color()
+}
+
+/// Set a new color
+/// 
+/// **Learning Point**: JavaScript strings are automatically converted to Rust `String`
+/// when passed as parameters to `#[wasm_bindgen]` functions.
+/// 
+/// **To extend**: You could add validation, length limits, or formatting here.
+/// 
+/// @param color - The new color to set
+#[wasm_bindgen]
+pub fn set_color(color: String) {
+    let mut state = HELLO_STATE.lock().unwrap();
+    state.set_color(color);
 }
 
