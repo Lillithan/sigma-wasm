@@ -29,6 +29,8 @@ let wasmModuleExports: {
   increment_counter: () => void;
   get_message: () => string;
   set_message: (message: string) => void;
+  get_color(): string;
+  set_color(color: string): void;
 } | null = null;
 
 /**
@@ -71,6 +73,12 @@ const getInitWasm = async (): Promise<unknown> => {
     if ('set_message' in moduleUnknown) {
       moduleKeys.push('set_message');
     }
+    if ('get_color' in moduleUnknown) {
+      moduleKeys.push('get_color');
+    }
+    if ('set_color' in moduleUnknown) {
+      moduleKeys.push('set_color');
+    }
     
     // Get all keys for error messages
     const allKeys = Object.keys(moduleUnknown);
@@ -89,11 +97,17 @@ const getInitWasm = async (): Promise<unknown> => {
     if (!('increment_counter' in moduleUnknown) || typeof moduleUnknown.increment_counter !== 'function') {
       throw new Error(`Module missing 'increment_counter' export. Available: ${allKeys.join(', ')}`);
     }
-    if (!('get_message' in moduleUnknown) || typeof moduleUnknown.get_message !== 'function') {
+    if (!('get_message' in moduleUnknown) || typeof moduleUnknown.get_color !== 'function') {
       throw new Error(`Module missing 'get_message' export. Available: ${allKeys.join(', ')}`);
     }
-    if (!('set_message' in moduleUnknown) || typeof moduleUnknown.set_message !== 'function') {
+    if (!('set_message' in moduleUnknown) || typeof moduleUnknown.set_color !== 'function') {
       throw new Error(`Module missing 'set_message' export. Available: ${allKeys.join(', ')}`);
+    }
+    if (!('get_color' in moduleUnknown) || typeof moduleUnknown.get_color !== 'function') {
+      throw new Error(`Module missing 'get_color' export. Available: ${allKeys.join(', ')}`);
+    }
+    if (!('set_color' in moduleUnknown) || typeof moduleUnknown.set_color !== 'function') {
+      throw new Error(`Module missing 'set_color' export. Available: ${allKeys.join(', ')}`);
     }
     
     // Extract and assign functions - we've validated they exist and are functions above
@@ -104,6 +118,8 @@ const getInitWasm = async (): Promise<unknown> => {
     const incrementCounterFunc = moduleUnknown.increment_counter;
     const getMessageFunc = moduleUnknown.get_message;
     const setMessageFunc = moduleUnknown.set_message;
+    const getColorFunc = moduleUnknown.get_color;
+    const setColorFunc = moduleUnknown.set_color;
     
     if (typeof defaultFunc !== 'function') {
       throw new Error('default export is not a function');
@@ -123,7 +139,12 @@ const getInitWasm = async (): Promise<unknown> => {
     if (typeof setMessageFunc !== 'function') {
       throw new Error('set_message export is not a function');
     }
-    
+    if (typeof getColorFunc !== 'function') {
+      throw new Error('get_color export is not a function');
+    }
+    if (typeof setColorFunc !== 'function') {
+      throw new Error('set_color export is not a function');
+    }
     // TypeScript can't narrow Function to specific signatures after validation
     // Runtime validation ensures these are safe
     wasmModuleExports = {
@@ -139,6 +160,11 @@ const getInitWasm = async (): Promise<unknown> => {
       get_message: getMessageFunc as () => string,
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       set_message: setMessageFunc as (message: string) => void,
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      get_color: getColorFunc as () => string,
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      set_color: setColorFunc as (color: string) => void,
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     };
   }
   if (!wasmModuleExports) {
@@ -217,6 +243,12 @@ function validateHelloModule(exports: unknown): WasmModuleHello | null {
     if (typeof wasmModuleExports.set_message !== 'function') {
       missingExports.push('set_message (function)');
     }
+    if (typeof wasmModuleExports.get_color !== 'function') {
+      missingExports.push('get_color (function)');
+    }
+    if (typeof wasmModuleExports.set_color !== 'function') {
+      missingExports.push('set_color (function)');
+    }
   }
   
   if (missingExports.length > 0) {
@@ -241,6 +273,8 @@ function validateHelloModule(exports: unknown): WasmModuleHello | null {
     increment_counter: wasmModuleExports.increment_counter,
     get_message: wasmModuleExports.get_message,
     set_message: wasmModuleExports.set_message,
+    get_color: wasmModuleExports.get_color,
+    set_color: wasmModuleExports.set_color,
   };
 }
 
@@ -308,11 +342,18 @@ export const init = async (): Promise<void> => {
   // Get UI elements
   const counterDisplay = document.getElementById('counter-display');
   const messageDisplay = document.getElementById('message-display');
+  const colorDisplay = document.getElementById('color-display');
   const incrementBtn = document.getElementById('increment-btn');
   const messageInputEl = document.getElementById('message-input');
   const setMessageBtn = document.getElementById('set-message-btn');
-  
-  if (!counterDisplay || !messageDisplay || !incrementBtn || !messageInputEl || !setMessageBtn) {
+
+  const counterDisplay = document.getElementById('counter-display');
+  const colorDisplay = document.getElementById('color-display');
+  const colorDisplay = document.getElementById('color-display');
+  const incrementBtn = document.getElementById('increment-btn');
+  const colorInputEl = document.getElementById('color-input');
+  const setColorBtn = document.getElementById('set-color-btn');
+  if (!counterDisplay || !colorDisplay || !incrementBtn || !colorInputEl || !setColorBtn) {
     throw new Error('Required UI elements not found');
   }
   
@@ -320,8 +361,13 @@ export const init = async (): Promise<void> => {
   if (!(messageInputEl instanceof HTMLInputElement)) {
     throw new Error('message-input element is not an HTMLInputElement');
   }
+  // Type narrowing for input element
+  if (!(colorInputEl instanceof HTMLInputElement)) {
+    throw new Error('color-input element is not an HTMLInputElement');
+  }
   
   const messageInput = messageInputEl;
+  const colorInput = colorInputEl;
   
   // Update display with initial values
   // **Learning Point**: We call WASM functions directly from TypeScript.
@@ -329,6 +375,10 @@ export const init = async (): Promise<void> => {
   if (WASM_HELLO.wasmModule) {
     counterDisplay.textContent = WASM_HELLO.wasmModule.get_counter().toString();
     messageDisplay.textContent = WASM_HELLO.wasmModule.get_message();
+  }
+  if (WASM_HELLO.wasmModule) {
+    counterDisplay.textContent = WASM_HELLO.wasmModule.get_counter().toString();
+    colorDisplay.textContent = WASM_HELLO.wasmModule.get_color();
   }
   
   // Set up event handlers
@@ -351,6 +401,16 @@ export const init = async (): Promise<void> => {
       }
     }
   });
+  setColorBtn.addEventListener('click', () => {
+    if (WASM_HELLO.wasmModule && colorInput) {
+      const newColor = colorInput.value.trim();
+      if (newColor) {
+        WASM_HELLO.wasmModule.set_color(newColor);
+        colorDisplay.textContent = WASM_HELLO.wasmModule.get_color();
+        colorInput.value = '';
+      }
+    }
+  });
   
   // Allow Enter key to set message
   messageInput.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -360,6 +420,17 @@ export const init = async (): Promise<void> => {
         WASM_HELLO.wasmModule.set_message(newMessage);
         messageDisplay.textContent = WASM_HELLO.wasmModule.get_message();
         messageInput.value = '';
+      }
+    }
+  });
+  // Allow Enter key to set color
+  colorInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter' && WASM_HELLO.wasmModule) {
+      const newColor = colorInput.value.trim();
+      if (newColor) {
+        WASM_HELLO.wasmModule.set_color(newColor);
+        colorDisplay.textContent = WASM_HELLO.wasmModule.get_color();
+        colorInput.value = '';
       }
     }
   });
