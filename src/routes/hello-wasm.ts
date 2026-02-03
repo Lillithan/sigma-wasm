@@ -31,6 +31,8 @@ let wasmModuleExports: {
   set_message: (message: string) => void;
   get_fave_gum: () => string;
   set_fave_gum: (gum: string) => void;
+  get_fave_ice_shape: () => string;
+  set_fave_ice_shape: (shape: string) => void;
 } | null = null;
 
 /**
@@ -79,6 +81,12 @@ const getInitWasm = async (): Promise<unknown> => {
     if ('set_fave_gum' in moduleUnknown) {
       moduleKeys.push('set_fave_gum');
     }
+    if ('get_fave_ice_shape' in moduleUnknown) {
+      moduleKeys.push('get_fave_ice_shape');
+    }
+    if ('set_fave_ice_shape' in moduleUnknown) {
+      moduleKeys.push('set_fave_ice_shape');
+    }
     
     // Get all keys for error messages
     const allKeys = Object.keys(moduleUnknown);
@@ -109,6 +117,12 @@ const getInitWasm = async (): Promise<unknown> => {
     if (!('set_fave_gum' in moduleUnknown) || typeof moduleUnknown.set_fave_gum !== 'function') {
       throw new Error(`Module missing 'set_fave_gum' export. Available: ${allKeys.join(', ')}`);
     }
+    if (!('get_fave_ice_shape' in moduleUnknown) || typeof moduleUnknown.get_fave_ice_shape !== 'function') {
+      throw new Error(`Module missing 'get_fave_ice_shape' export. Available: ${allKeys.join(', ')}`);
+    }
+    if (!('set_fave_ice_shape' in moduleUnknown) || typeof moduleUnknown.set_fave_ice_shape !== 'function') {
+      throw new Error(`Module missing 'set_fave_ice_shape' export. Available: ${allKeys.join(', ')}`);
+    }
     
     // Extract and assign functions - we've validated they exist and are functions above
     // Access properties directly after validation
@@ -120,6 +134,8 @@ const getInitWasm = async (): Promise<unknown> => {
     const setMessageFunc = moduleUnknown.set_message;
     const getFaveGumFunc = moduleUnknown.get_fave_gum;
     const setFaveGumFunc = moduleUnknown.set_fave_gum;
+    const getFaveIceShapeFunc = moduleUnknown.get_fave_ice_shape;
+    const setFaveIceShapeFunc = moduleUnknown.set_fave_ice_shape;
     
     if (typeof defaultFunc !== 'function') {
       throw new Error('default export is not a function');
@@ -165,6 +181,10 @@ const getInitWasm = async (): Promise<unknown> => {
       get_fave_gum: getFaveGumFunc as () => string,
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       set_fave_gum: setFaveGumFunc as (gum: string) => void,
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      get_fave_ice_shape: getFaveIceShapeFunc as () => string,
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      set_fave_ice_shape: setFaveIceShapeFunc as (shape: string) => void,
     };
   }
   if (!wasmModuleExports) {
@@ -249,6 +269,12 @@ function validateHelloModule(exports: unknown): WasmModuleHello | null {
     if (typeof wasmModuleExports.set_fave_gum !== 'function') {
       missingExports.push('set_fave_gum (function)');
     }
+    if (typeof wasmModuleExports.get_fave_ice_shape !== 'function') {
+      missingExports.push('get_fave_ice_shape (function)');
+    }
+    if (typeof wasmModuleExports.set_fave_ice_shape !== 'function') {
+      missingExports.push('set_fave_ice_shape (function)');
+    }
   }
   
   if (missingExports.length > 0) {
@@ -275,6 +301,8 @@ function validateHelloModule(exports: unknown): WasmModuleHello | null {
     set_message: wasmModuleExports.set_message,
     get_fave_gum: wasmModuleExports.get_fave_gum,
     set_fave_gum: wasmModuleExports.set_fave_gum,
+    get_fave_ice_shape: wasmModuleExports.get_fave_ice_shape,
+    set_fave_ice_shape: wasmModuleExports.set_fave_ice_shape,
   };
 }
 
@@ -348,10 +376,14 @@ export const init = async (): Promise<void> => {
   const setMessageBtn = document.getElementById('set-message-btn');
   const faveGumInputEl = document.getElementById('fave-gum-input');
   const setFaveGumBtn = document.getElementById('set-fave-gum-btn');
+  const faveIceDisplay = document.getElementById('fave-ice-display');
+  const faveIceInputEl = document.getElementById('fave-ice-input');
+  const setFaveIceBtn = document.getElementById('set-fave-ice-btn');
   
   if (!counterDisplay || !messageDisplay || 
     !incrementBtn || !messageInputEl || !setMessageBtn ||
     !faveGumDisplay || !faveGumInputEl || !setFaveGumBtn
+    || !faveIceDisplay || !faveIceInputEl || !setFaveIceBtn
   ) {
     throw new Error('Required UI elements not found');
   }
@@ -370,6 +402,13 @@ export const init = async (): Promise<void> => {
   
   const faveGumInput = faveGumInputEl;
   
+  // Type narrowing for ice input element
+  if (!(faveIceInputEl instanceof HTMLInputElement)) {
+    throw new Error('fave-ice-input element is not an HTMLInputElement');
+  }
+
+  const faveIceInput = faveIceInputEl;
+  
   // Update display with initial values
   // **Learning Point**: We call WASM functions directly from TypeScript.
   // The wasm-bindgen generated code handles the marshalling between JS and WASM.
@@ -377,6 +416,7 @@ export const init = async (): Promise<void> => {
     counterDisplay.textContent = WASM_HELLO.wasmModule.get_counter().toString();
     messageDisplay.textContent = WASM_HELLO.wasmModule.get_message();
     faveGumDisplay.textContent = WASM_HELLO.wasmModule.get_fave_gum();
+    faveIceDisplay.textContent = WASM_HELLO.wasmModule.get_fave_ice_shape();
   }
   
   // Set up event handlers
@@ -423,6 +463,17 @@ export const init = async (): Promise<void> => {
     }
   });
 
+  setFaveIceBtn.addEventListener('click', () => {
+    if (WASM_HELLO.wasmModule && faveIceInput) {
+      const newShape = faveIceInput.value.trim();
+      if (newShape) {
+        WASM_HELLO.wasmModule.set_fave_ice_shape(newShape);
+        faveIceDisplay.textContent = WASM_HELLO.wasmModule.get_fave_ice_shape();
+        faveIceInput.value = '';
+      }
+    }
+  });
+
   // Allow Enter key to set message
   faveGumInput.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter' && WASM_HELLO.wasmModule) {
@@ -431,6 +482,18 @@ export const init = async (): Promise<void> => {
         WASM_HELLO.wasmModule.set_fave_gum(newGum);
         faveGumDisplay.textContent = WASM_HELLO.wasmModule.get_fave_gum();
         faveGumInput.value = '';
+      }
+    }
+  });
+  
+  // Allow Enter key to set favorite ice shape
+  faveIceInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter' && WASM_HELLO.wasmModule) {
+      const newShape = faveIceInput.value.trim();
+      if (newShape) {
+        WASM_HELLO.wasmModule.set_fave_ice_shape(newShape);
+        faveIceDisplay.textContent = WASM_HELLO.wasmModule.get_fave_ice_shape();
+        faveIceInput.value = '';
       }
     }
   });

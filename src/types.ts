@@ -197,6 +197,8 @@ export interface WasmModuleHello {
   set_message(message: string): void;
   get_fave_gum(): string;
   set_fave_gum(gum: string): void;
+  get_fave_ice_shape(): string;
+  set_fave_ice_shape(shape: string): void;
 }
 
 export interface WasmHello {

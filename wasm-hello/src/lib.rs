@@ -18,6 +18,8 @@ struct HelloState {
     message: String,
     /// Gum string that can be set and retrieved
     gum: String,
+        /// Favorite ice shape that can be set and retrieved
+        ice_shape: String,
 }
 
 impl HelloState {
@@ -27,6 +29,7 @@ impl HelloState {
             counter: 0,
             message: String::from("Rust WASM is so Sigma!"),
             gum: String::from("Hubba Bubba"),
+            ice_shape: String::from("Cube"),
         }
     }
     
@@ -58,6 +61,16 @@ impl HelloState {
     /// Set a new gum
     fn set_fave_gum(&mut self, gum: String) {
         self.gum = gum;
+    }
+
+    /// Get the current favorite ice shape
+    fn get_fave_ice_shape(&self) -> String {
+        self.ice_shape.clone()
+    }
+
+    /// Set a new favorite ice shape
+    fn set_fave_ice_shape(&mut self, shape: String) {
+        self.ice_shape = shape;
     }
 }
 
@@ -169,5 +182,19 @@ pub fn get_fave_gum() -> String {
 pub fn set_fave_gum(gum: String) {
     let mut state = HELLO_STATE.lock().unwrap();
     state.set_fave_gum(gum);
+}
+
+/// Get the current favorite ice shape
+#[wasm_bindgen]
+pub fn get_fave_ice_shape() -> String {
+    let state = HELLO_STATE.lock().unwrap();
+    state.get_fave_ice_shape()
+}
+
+/// Set a new favorite ice shape
+#[wasm_bindgen]
+pub fn set_fave_ice_shape(shape: String) {
+    let mut state = HELLO_STATE.lock().unwrap();
+    state.set_fave_ice_shape(shape);
 }
 
