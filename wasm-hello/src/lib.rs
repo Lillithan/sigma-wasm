@@ -18,8 +18,10 @@ struct HelloState {
     message: String,
     /// Gum string that can be set and retrieved
     gum: String,
-        /// Favorite ice shape that can be set and retrieved
-        ice_shape: String,
+    /// Favorite ice shape that can be set and retrieved
+    ice_shape: String,
+    /// Decimal value ranging from -10.0 to 10.0
+    decimal: f64,
 }
 
 impl HelloState {
@@ -30,6 +32,7 @@ impl HelloState {
             message: String::from("Rust WASM is so Sigma!"),
             gum: String::from("Hubba Bubba"),
             ice_shape: String::from("Cube"),
+            decimal: 0.0,
         }
     }
     
@@ -71,6 +74,16 @@ impl HelloState {
     /// Set a new favorite ice shape
     fn set_fave_ice_shape(&mut self, shape: String) {
         self.ice_shape = shape;
+    }
+
+    /// Get the current decimal value
+    fn get_decimal(&self) -> f64 {
+        self.decimal
+    }
+
+    /// Set a new decimal value (clamped to -10.0 to 10.0)
+    fn set_decimal(&mut self, value: f64) {
+        self.decimal = value.max(-10.0).min(10.0);
     }
 }
 
@@ -198,3 +211,28 @@ pub fn set_fave_ice_shape(shape: String) {
     state.set_fave_ice_shape(shape);
 }
 
+/// Get the current decimal value
+/// 
+/// **Learning Point**: This demonstrates how to work with floating-point numbers
+/// in WASM. f64 values are automatically converted between Rust and JavaScript.
+/// 
+/// @returns The current decimal value (between -10.0 and 10.0)
+#[wasm_bindgen]
+pub fn get_decimal() -> f64 {
+    let state = HELLO_STATE.lock().unwrap();
+    state.get_decimal()
+}
+
+/// Set a new decimal value
+/// 
+/// **Learning Point**: The value is clamped to the range [-10.0, 10.0] to ensure
+/// it stays within the expected range. This is a common pattern for constrained values.
+/// 
+/// **To extend**: You could add rounding, step validation, or change constraints here.
+/// 
+/// @param value - The new decimal value (will be clamped to [-10.0, 10.0])
+#[wasm_bindgen]
+pub fn set_decimal(value: f64) {
+    let mut state = HELLO_STATE.lock().unwrap();
+    state.set_decimal(value);
+}

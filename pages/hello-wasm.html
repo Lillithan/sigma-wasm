@@ -111,6 +111,20 @@
                     <button id="set-fave-ice-btn" class="button">Set Favorite Ice Shape</button>
                     <p style="font-size: 0.9rem; color: #888; margin-top: 0.5rem;">Press Enter in the input field to set the favorite ice shape.</p>
                 </div>
+
+                <!-- Decimal display and control (new) -->
+                <div style="margin: 1rem 0;">
+                    <h3>Decimal Value</h3>
+                    <p>Current value: <strong id="decimal-display">0.0</strong></p>
+                    <div class="decimal-slider-container">
+                        <span class="decimal-min">-10.0</span>
+                        <input type="range" id="decimal-slider" class="decimal-slider" min="-100" max="100" value="0" step="1">
+                        <span class="decimal-max">10.0</span>
+                    </div>
+                    <input type="number" id="decimal-input" class="decimal-input" placeholder="Enter a value between -10.0 and 10.0" min="-10" max="10" step="0.1">
+                    <button id="set-decimal-btn" class="button">Set Decimal Value</button>
+                    <p style="font-size: 0.9rem; color: #888; margin-top: 0.5rem;">Use the slider or input field to set a decimal value.</p>
+                </div>
             </div>
         </div>
     </div>

@@ -33,6 +33,8 @@ let wasmModuleExports: {
   set_fave_gum: (gum: string) => void;
   get_fave_ice_shape: () => string;
   set_fave_ice_shape: (shape: string) => void;
+  get_decimal: () => number;
+  set_decimal: (value: number) => void;
 } | null = null;
 
 /**
@@ -87,6 +89,12 @@ const getInitWasm = async (): Promise<unknown> => {
     if ('set_fave_ice_shape' in moduleUnknown) {
       moduleKeys.push('set_fave_ice_shape');
     }
+    if ('get_decimal' in moduleUnknown) {
+      moduleKeys.push('get_decimal');
+    }
+    if ('set_decimal' in moduleUnknown) {
+      moduleKeys.push('set_decimal');
+    }
     
     // Get all keys for error messages
     const allKeys = Object.keys(moduleUnknown);
@@ -123,6 +131,12 @@ const getInitWasm = async (): Promise<unknown> => {
     if (!('set_fave_ice_shape' in moduleUnknown) || typeof moduleUnknown.set_fave_ice_shape !== 'function') {
       throw new Error(`Module missing 'set_fave_ice_shape' export. Available: ${allKeys.join(', ')}`);
     }
+    if (!('get_decimal' in moduleUnknown) || typeof moduleUnknown.get_decimal !== 'function') {
+      throw new Error(`Module missing 'get_decimal' export. Available: ${allKeys.join(', ')}`);
+    }
+    if (!('set_decimal' in moduleUnknown) || typeof moduleUnknown.set_decimal !== 'function') {
+      throw new Error(`Module missing 'set_decimal' export. Available: ${allKeys.join(', ')}`);
+    }
     
     // Extract and assign functions - we've validated they exist and are functions above
     // Access properties directly after validation
@@ -136,6 +150,8 @@ const getInitWasm = async (): Promise<unknown> => {
     const setFaveGumFunc = moduleUnknown.set_fave_gum;
     const getFaveIceShapeFunc = moduleUnknown.get_fave_ice_shape;
     const setFaveIceShapeFunc = moduleUnknown.set_fave_ice_shape;
+    const getDecimalFunc = moduleUnknown.get_decimal;
+    const setDecimalFunc = moduleUnknown.set_decimal;
     
     if (typeof defaultFunc !== 'function') {
       throw new Error('default export is not a function');
@@ -161,6 +177,18 @@ const getInitWasm = async (): Promise<unknown> => {
     if (typeof setFaveGumFunc !== 'function') {
       throw new Error('set_fave_gum export is not a function');
     }
+    if (typeof getFaveIceShapeFunc !== 'function') {
+      throw new Error('get_fave_ice_shape export is not a function');
+    }
+    if (typeof setFaveIceShapeFunc !== 'function') {
+      throw new Error('set_fave_ice_shape export is not a function');
+    }
+    if (typeof getDecimalFunc !== 'function') {
+      throw new Error('get_decimal export is not a function');
+    }
+    if (typeof setDecimalFunc !== 'function') {
+      throw new Error('set_decimal export is not a function');
+    }
     
     // TypeScript can't narrow Function to specific signatures after validation
     // Runtime validation ensures these are safe
@@ -185,6 +213,10 @@ const getInitWasm = async (): Promise<unknown> => {
       get_fave_ice_shape: getFaveIceShapeFunc as () => string,
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       set_fave_ice_shape: setFaveIceShapeFunc as (shape: string) => void,
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      get_decimal: getDecimalFunc as () => number,
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      set_decimal: setDecimalFunc as (value: number) => void,
     };
   }
   if (!wasmModuleExports) {
@@ -275,6 +307,12 @@ function validateHelloModule(exports: unknown): WasmModuleHello | null {
     if (typeof wasmModuleExports.set_fave_ice_shape !== 'function') {
       missingExports.push('set_fave_ice_shape (function)');
     }
+    if (typeof wasmModuleExports.get_decimal !== 'function') {
+      missingExports.push('get_decimal (function)');
+    }
+    if (typeof wasmModuleExports.set_decimal !== 'function') {
+      missingExports.push('set_decimal (function)');
+    }
   }
   
   if (missingExports.length > 0) {
@@ -303,6 +341,8 @@ function validateHelloModule(exports: unknown): WasmModuleHello | null {
     set_fave_gum: wasmModuleExports.set_fave_gum,
     get_fave_ice_shape: wasmModuleExports.get_fave_ice_shape,
     set_fave_ice_shape: wasmModuleExports.set_fave_ice_shape,
+    get_decimal: wasmModuleExports.get_decimal,
+    set_decimal: wasmModuleExports.set_decimal,
   };
 }
 
@@ -379,11 +419,16 @@ export const init = async (): Promise<void> => {
   const faveIceDisplay = document.getElementById('fave-ice-display');
   const faveIceInputEl = document.getElementById('fave-ice-input');
   const setFaveIceBtn = document.getElementById('set-fave-ice-btn');
+  const decimalDisplay = document.getElementById('decimal-display');
+  const decimalSliderEl = document.getElementById('decimal-slider');
+  const decimalInputEl = document.getElementById('decimal-input');
+  const setDecimalBtn = document.getElementById('set-decimal-btn');
   
   if (!counterDisplay || !messageDisplay || 
     !incrementBtn || !messageInputEl || !setMessageBtn ||
     !faveGumDisplay || !faveGumInputEl || !setFaveGumBtn
     || !faveIceDisplay || !faveIceInputEl || !setFaveIceBtn
+    || !decimalDisplay || !decimalSliderEl || !decimalInputEl || !setDecimalBtn
   ) {
     throw new Error('Required UI elements not found');
   }
@@ -408,6 +453,20 @@ export const init = async (): Promise<void> => {
   }
 
   const faveIceInput = faveIceInputEl;
+
+  // Type narrowing for decimal slider element
+  if (!(decimalSliderEl instanceof HTMLInputElement)) {
+    throw new Error('decimal-slider element is not an HTMLInputElement');
+  }
+
+  const decimalSlider = decimalSliderEl;
+
+  // Type narrowing for decimal input element
+  if (!(decimalInputEl instanceof HTMLInputElement)) {
+    throw new Error('decimal-input element is not an HTMLInputElement');
+  }
+
+  const decimalInput = decimalInputEl;
   
   // Update display with initial values
   // **Learning Point**: We call WASM functions directly from TypeScript.
@@ -417,6 +476,10 @@ export const init = async (): Promise<void> => {
     messageDisplay.textContent = WASM_HELLO.wasmModule.get_message();
     faveGumDisplay.textContent = WASM_HELLO.wasmModule.get_fave_gum();
     faveIceDisplay.textContent = WASM_HELLO.wasmModule.get_fave_ice_shape();
+    const initialDecimal = WASM_HELLO.wasmModule.get_decimal();
+    decimalDisplay.textContent = initialDecimal.toFixed(1);
+    decimalSlider.value = (initialDecimal * 10).toString();
+    decimalInput.value = initialDecimal.toFixed(1);
   }
   
   // Set up event handlers
@@ -494,6 +557,59 @@ export const init = async (): Promise<void> => {
         WASM_HELLO.wasmModule.set_fave_ice_shape(newShape);
         faveIceDisplay.textContent = WASM_HELLO.wasmModule.get_fave_ice_shape();
         faveIceInput.value = '';
+      }
+    }
+  });
+
+  // Decimal slider input handler
+  decimalSlider.addEventListener('input', () => {
+    if (WASM_HELLO.wasmModule) {
+      const sliderValue = parseInt(decimalSlider.value, 10);
+      const decimalValue = sliderValue / 10;
+      WASM_HELLO.wasmModule.set_decimal(decimalValue);
+      const updatedValue = WASM_HELLO.wasmModule.get_decimal();
+      decimalDisplay.textContent = updatedValue.toFixed(1);
+      decimalInput.value = updatedValue.toFixed(1);
+    }
+  });
+
+  // Decimal input field handler
+  decimalInput.addEventListener('input', () => {
+    if (WASM_HELLO.wasmModule) {
+      const inputValue = parseFloat(decimalInput.value);
+      if (!isNaN(inputValue)) {
+        WASM_HELLO.wasmModule.set_decimal(inputValue);
+        const updatedValue = WASM_HELLO.wasmModule.get_decimal();
+        decimalDisplay.textContent = updatedValue.toFixed(1);
+        decimalSlider.value = (updatedValue * 10).toString();
+      }
+    }
+  });
+
+  // Decimal button handler
+  setDecimalBtn.addEventListener('click', () => {
+    if (WASM_HELLO.wasmModule && decimalInput) {
+      const inputValue = parseFloat(decimalInput.value);
+      if (!isNaN(inputValue)) {
+        WASM_HELLO.wasmModule.set_decimal(inputValue);
+        const updatedValue = WASM_HELLO.wasmModule.get_decimal();
+        decimalDisplay.textContent = updatedValue.toFixed(1);
+        decimalSlider.value = (updatedValue * 10).toString();
+        decimalInput.value = updatedValue.toFixed(1);
+      }
+    }
+  });
+
+  // Allow Enter key to set decimal value
+  decimalInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter' && WASM_HELLO.wasmModule) {
+      const inputValue = parseFloat(decimalInput.value);
+      if (!isNaN(inputValue)) {
+        WASM_HELLO.wasmModule.set_decimal(inputValue);
+        const updatedValue = WASM_HELLO.wasmModule.get_decimal();
+        decimalDisplay.textContent = updatedValue.toFixed(1);
+        decimalSlider.value = (updatedValue * 10).toString();
+        decimalInput.value = updatedValue.toFixed(1);
       }
     }
   });

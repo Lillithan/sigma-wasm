@@ -756,3 +756,123 @@ h1 {
     background: rgba(255, 0, 255, 0.4);
   }
 }
+
+/* Decimal slider styling */
+.decimal-slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0;
+  width: 100%;
+  max-width: 500px;
+}
+
+.decimal-min,
+.decimal-max {
+  color: #aaa;
+  font-weight: 500;
+  min-width: 50px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.decimal-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, 
+    rgba(76, 175, 80, 0.3) 0%, 
+    rgba(76, 175, 80, 0.5) 50%, 
+    rgba(76, 175, 80, 0.3) 100%);
+  outline: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.decimal-slider:hover {
+  background: linear-gradient(to right, 
+    rgba(76, 175, 80, 0.5) 0%, 
+    rgba(76, 175, 80, 0.7) 50%, 
+    rgba(76, 175, 80, 0.5) 100%);
+}
+
+/* Slider thumb/track styling for Chrome/Edge */
+.decimal-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+  transition: all 0.2s ease;
+  border: 2px solid #2d5a1f;
+}
+
+.decimal-slider::-webkit-slider-thumb:hover {
+  width: 22px;
+  height: 22px;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.6);
+}
+
+.decimal-slider::-webkit-slider-thumb:active {
+  background: #45a049;
+  box-shadow: 0 2px 6px rgba(76, 175, 80, 0.5);
+}
+
+/* Slider thumb/track styling for Firefox */
+.decimal-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+  transition: all 0.2s ease;
+  border: 2px solid #2d5a1f;
+}
+
+.decimal-slider::-moz-range-thumb:hover {
+  width: 22px;
+  height: 22px;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.6);
+}
+
+.decimal-slider::-moz-range-thumb:active {
+  background: #45a049;
+  box-shadow: 0 2px 6px rgba(76, 175, 80, 0.5);
+}
+
+.decimal-slider::-moz-range-track {
+  background: transparent;
+  border: none;
+}
+
+.decimal-input {
+  width: 100%;
+  max-width: 240px;
+  padding: 0.5rem;
+  margin: 0.5rem 0;
+  font-family: monospace;
+  background: #2a2a2a;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  border-radius: 4px;
+  font-size: inherit;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.decimal-input:focus {
+  outline: none;
+  border-color: #4CAF50;
+  background: #333;
+}
+
+.decimal-input:invalid {
+  border-color: #f44336;
+  background: rgba(244, 67, 54, 0.1);
+}
